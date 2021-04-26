@@ -53,11 +53,10 @@ func (ss *stringSlice) Set(val string) error {
 }
 
 var (
-	header = `/*
- * CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
- * THIS FILE SHOULD NOT BE EDITED BY HAND
- *
- */
+	header = `//
+// CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
+// THIS FILE SHOULD NOT BE EDITED BY HAND
+//
 package %s
 `
 	compositeClzTemplate = `type %s struct {
@@ -381,6 +380,23 @@ func getGoPathConfig() string {
 	return gopathConfig
 }
 
+func formatGoFile(filePath string) {
+	b, err := ioutil.ReadFile(filePath)
+
+	if err != nil {
+		fmt.Printf("Error in reading file %s, error: %s", filePath, err)
+		return
+	}
+
+	bb, err := format.Source(b)
+	if err != nil {
+		fmt.Printf("Error in formatting Go source %s, error: %s", filePath, err)
+		return
+	}
+
+	ioutil.WriteFile(filePath, bb, 0644)
+}
+
 func Execute() {
 	var methodsToClone stringSlice
 	var methodsToMock stringSlice
@@ -520,6 +536,8 @@ func Execute() {
 							}
 						}
 						output.Close()
+
+						formatGoFile(filepath.Join(pkgDir, outputFileName))
 
 						fmt.Printf("Done scan with %s\n\n", filepath.Join(pkgDir, fileInfo.Name()))
 					}
