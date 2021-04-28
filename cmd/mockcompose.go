@@ -321,7 +321,7 @@ func (g *generator) generateInternal(
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `
+	Log(PROMPT, `
 Usage: %s [-help] [options]
 
 mockcompose generate a composite mocking class implementation.
@@ -333,7 +333,7 @@ mockcompose generate a composite mocking class implementation.
 func derivePackage() string {
 	path, err := filepath.Abs("")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error in accessing file system. error: %s\n", err)
+		Log(PROMPT, "Error in accessing file system. error: %s\n", err)
 		os.Exit(1)
 	}
 	path = stripGopath(path)
@@ -345,7 +345,7 @@ func stripGopath(p string) string {
 	gopathConfig := getGoPathConfig()
 
 	for _, gopath := range strings.Split(gopathConfig, string(filepath.ListSeparator)) {
-		fmt.Printf("check gopath: %s\n", gopath)
+		Log(VERBOSE, "check gopath: %s\n", gopath)
 		p = strings.Replace(p, gopath+"/", "", 1)
 	}
 
@@ -384,13 +384,13 @@ func formatGoFile(filePath string) {
 	b, err := ioutil.ReadFile(filePath)
 
 	if err != nil {
-		fmt.Printf("Error in reading file %s, error: %s", filePath, err)
+		Log(PROMPT, "Error in reading file %s, error: %s", filePath, err)
 		return
 	}
 
 	bb, err := format.Source(b)
 	if err != nil {
-		fmt.Printf("Error in formatting Go source %s, error: %s", filePath, err)
+		Log(PROMPT, "Error in formatting Go source %s, error: %s", filePath, err)
 		return
 	}
 
@@ -401,6 +401,7 @@ func Execute() {
 	var methodsToClone stringSlice
 	var methodsToMock stringSlice
 
+	vb := flag.Bool("v", false, "If set, print verbose logging messages")
 	pkg := flag.String("pkg", "", "Name of the package for which to generate composite mocking implementation")
 	clzName := flag.String("c", "", "Name of the class for which to generate composite mocking implementation")
 	mockClzName := flag.String("m", "", "Name of the mocking class that implements the same interface as -c specified class")
@@ -411,35 +412,41 @@ func Execute() {
 
 	flag.Parse()
 
+	if *vb {
+		LogLevel = int(VERBOSE)
+
+		Log(VERBOSE, "Set logging to verbose mode")
+	}
+
 	if *pkg == "" {
 		*pkg = derivePackage()
 
-		fmt.Printf("Derive package name as: %s\n", *pkg)
+		Log(VERBOSE, "Derive package name as: %s\n", *pkg)
 	}
 	fmt.Println()
 
 	if *mockName == "" {
-		fmt.Fprintf(os.Stderr, "Please specify composite mocking class name with -n option\n")
+		Log(PROMPT, "Please specify composite mocking class name with -n option\n")
 		os.Exit(1)
 	}
 
 	if *clzName == "" {
-		fmt.Fprintf(os.Stderr, "Please specify the class name for which to generate composite mocking implementation with -c option\n")
+		Log(PROMPT, "Please specify the class name for which to generate composite mocking implementation with -c option\n")
 		os.Exit(1)
 	}
 
 	if *mockClzName == "" {
-		fmt.Fprintf(os.Stderr, "Please specify the mocking class name that implements the same interface as -c specified class with -m option\n")
+		Log(PROMPT, "Please specify the mocking class name that implements the same interface as -c specified class with -m option\n")
 		os.Exit(1)
 	}
 
 	if len(methodsToClone) == 0 {
-		fmt.Fprintf(os.Stderr, "Please specify at least one real method name with -real option\n")
+		Log(PROMPT, "Please specify at least one real method name with -real option\n")
 		os.Exit(1)
 	}
 
 	if len(methodsToMock) > 0 && *mockClzFileName == "" {
-		fmt.Fprintf(os.Stderr, "Please specify the name of the file that implements -m specified mocking class\n")
+		Log(PROMPT, "Please specify the name of the file that implements -m specified mocking class\n")
 		os.Exit(1)
 	}
 
@@ -450,16 +457,16 @@ func Execute() {
 		// support scanning of subfolder src/ and pkg/
 		for _, subFolder := range []string{"src", "pkg"} {
 			pkgDir, err := filepath.Abs(path.Join(gopath, subFolder, *pkg))
-			fmt.Printf("Check directory %s for code generation\n", pkgDir)
+			Log(VERBOSE, "Check directory %s for code generation\n", pkgDir)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error in accessing file system. error: %s\n", err)
+				Log(PROMPT, "Error in accessing file system. error: %s\n", err)
 				os.Exit(1)
 			}
 
 			if dir, err := os.Stat(pkgDir); err == nil && dir.IsDir() {
 				fileInfos, err := ioutil.ReadDir(pkgDir)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error in accessing file system. error: %s\n", err)
+					Log(PROMPT, "Error in accessing file system. error: %s\n", err)
 					os.Exit(1)
 				}
 
@@ -467,7 +474,7 @@ func Execute() {
 					if strings.HasSuffix(fileInfo.Name(), ".go") &&
 						!strings.HasSuffix(fileInfo.Name(), "_test.go") {
 
-						fmt.Printf("Scan %s...\n", filepath.Join(pkgDir, fileInfo.Name()))
+						Log(PROMPT, "Scan %s...\n", filepath.Join(pkgDir, fileInfo.Name()))
 
 						fset := token.NewFileSet()
 						file, err := parser.ParseFile(
@@ -477,8 +484,7 @@ func Execute() {
 							parser.ParseComments)
 
 						if err != nil {
-							fmt.Fprintf(
-								os.Stderr, "Error in parsing %s, error: %s\n",
+							Log(PROMPT, "Error in parsing %s, error: %s\n",
 								filepath.Join(pkgDir, fileInfo.Name()), err,
 							)
 							continue
@@ -494,8 +500,7 @@ func Execute() {
 								parser.ParseComments)
 
 							if err != nil {
-								fmt.Fprintf(
-									os.Stderr, "Error in parsing %s, error: %s\n",
+								Log(PROMPT, "Error in parsing %s, error: %s\n",
 									filepath.Join(pkgDir, *mockClzFileName), err,
 								)
 							}
@@ -516,8 +521,7 @@ func Execute() {
 							os.O_CREATE|os.O_RDWR,
 							0644)
 						if err != nil {
-							fmt.Fprintf(
-								os.Stderr, "Error in creating %s, error: %s\n",
+							Log(PROMPT, "Error in creating %s, error: %s\n",
 								outputFileName, err,
 							)
 
@@ -528,7 +532,7 @@ func Execute() {
 
 						offset, err := output.Seek(0, io.SeekCurrent)
 						if err != nil {
-							fmt.Printf("Error in file operation on %s, error: %s", outputFileName, err)
+							Log(PROMPT, "Error in file operation on %s, error: %s", outputFileName, err)
 						} else {
 							fi, _ := output.Stat()
 							if offset > 0 && offset < fi.Size() {
@@ -539,7 +543,7 @@ func Execute() {
 
 						formatGoFile(filepath.Join(pkgDir, outputFileName))
 
-						fmt.Printf("Done scan with %s\n\n", filepath.Join(pkgDir, fileInfo.Name()))
+						Log(VERBOSE, "Done scan with %s\n\n", filepath.Join(pkgDir, fileInfo.Name()))
 					}
 				}
 			}

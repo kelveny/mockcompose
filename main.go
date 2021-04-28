@@ -1,14 +1,11 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/kelveny/mockcompose/cmd"
 )
 
 func main() {
-	fmt.Println("Running docker compose version 0.1.3")
-	fmt.Println()
+	cmd.Log(cmd.PROMPT, "Running mockcompose version 0.1.4\n")
 
 	cmd.Execute()
 }

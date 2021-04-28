@@ -46,7 +46,7 @@ mockcompose can also be used in 'go generate', usually together with [mockery](h
 //go:generate mockery --inpackage --testonly --name Foo
 //go:generate mockcompose -n testFoo -c foo -m MockFoo -mm mock_Foo_test.go -real Foo -mock Bar
 ```
-In the example, mockcompose will generate a testFoo class with Foo() method function cloned from real foo class implementation, and Bar() method function cloned from MockFoo class mocking code.
+In the example, mockcompose will generate a testFoo class with Foo() method function cloned from real foo class implementation, and Bar() method function cloned from MockFoo class generated from mockery.
 
 foo.go
 ```go
