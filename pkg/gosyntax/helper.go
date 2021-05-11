@@ -1,4 +1,4 @@
-package syntax
+package gosyntax
 
 import (
 	"bytes"
@@ -93,27 +93,63 @@ const (
 `
 )
 
-// ForEachDecl iterates all AST Decl objects in a AST syntactic package
-func ForEachDecl(
+// ForEachDeclInPackage iterates all AST Decl objects in a AST syntactic package
+func ForEachDeclInPackage(
 	p *packages.Package,
-	do func(*packages.Package, ast.Decl),
+	do func(ast.Decl),
 ) {
 	for _, astFile := range p.Syntax {
 		for _, d := range astFile.Decls {
-			do(p, d)
+			do(d)
 		}
 	}
 }
 
-// ForEachFuncDecl iterates all AST FuncDecl objects in a AST syntactic package
-func ForEachFuncDecl(
+// ForEachFuncDeclInPackage iterates all AST FuncDecl objects in a AST syntactic package
+func ForEachFuncDeclInPackage(
 	p *packages.Package,
-	do func(*packages.Package, *ast.FuncDecl),
+	do func(*ast.FuncDecl),
 ) {
 	for _, astFile := range p.Syntax {
 		for _, d := range astFile.Decls {
 			if fn, ok := d.(*ast.FuncDecl); ok {
-				do(p, fn)
+				do(fn)
+			}
+		}
+	}
+}
+
+func ForEachInterfaceDeclInPackage(
+	p *packages.Package,
+	do func(name string, methods []*ast.Field),
+) {
+	for _, astFile := range p.Syntax {
+		ForEachInterfaceDeclInFile(astFile, do)
+	}
+}
+
+func ForEachFuncDeclInFile(
+	file *ast.File,
+	do func(*ast.FuncDecl),
+) {
+	for _, d := range file.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok {
+			do(fn)
+		}
+	}
+}
+
+func ForEachInterfaceDeclInFile(file *ast.File,
+	do func(name string, methods []*ast.Field),
+) {
+	for _, d := range file.Decls {
+		if gd, ok := d.(*ast.GenDecl); ok {
+			for _, spec := range gd.Specs {
+				if tspec, ok := spec.(*ast.TypeSpec); ok {
+					if intf, ok := tspec.Type.(*ast.InterfaceType); ok {
+						do(tspec.Name.Name, intf.Methods.List)
+					}
+				}
 			}
 		}
 	}
@@ -166,8 +202,8 @@ type FieldDeclInfo struct {
 	Variadic bool
 }
 
-func ParamListDeclInfo(fset *token.FileSet, fl *ast.FieldList) []FieldDeclInfo {
-	infos := []FieldDeclInfo{}
+func ParamListDeclInfo(fset *token.FileSet, fl *ast.FieldList) []*FieldDeclInfo {
+	infos := []*FieldDeclInfo{}
 	if fl != nil && fl.NumFields() > 0 {
 		for _, f := range fl.List {
 			name := ""
@@ -182,7 +218,7 @@ func ParamListDeclInfo(fset *token.FileSet, fl *ast.FieldList) []FieldDeclInfo {
 				variadic = true
 			}
 
-			infos = append(infos, FieldDeclInfo{
+			infos = append(infos, &FieldDeclInfo{
 				Name:     name,
 				Typ:      typ,
 				Variadic: variadic,
@@ -193,7 +229,53 @@ func ParamListDeclInfo(fset *token.FileSet, fl *ast.FieldList) []FieldDeclInfo {
 	return infos
 }
 
-func ParamListInvokeString(params []FieldDeclInfo) string {
+func ParamInfoListNameExists(paramInfos []*FieldDeclInfo, name string) bool {
+	for _, param := range paramInfos {
+		if param.Name == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func ParamInfoListFixup(paramInfos []*FieldDeclInfo) {
+	i := 0
+	for _, param := range paramInfos {
+		if param.Name == "" {
+			for {
+				name := fmt.Sprintf("_a%d", i)
+				if ParamInfoListNameExists(paramInfos, name) {
+					i++
+				} else {
+					param.Name = name
+					i++
+					break
+				}
+			}
+		}
+	}
+}
+
+func ParamInfoListDeclString(params []*FieldDeclInfo) string {
+	names := []string{}
+
+	if len(params) > 0 {
+		for _, field := range params {
+			name := ""
+			if field.Name != "" {
+				name = field.Name + " " + field.Typ
+			} else {
+				name = field.Typ
+			}
+
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+func ParamListInvokeString(params []*FieldDeclInfo) string {
 	s := []string{}
 	for _, paramInfo := range params {
 		if paramInfo.Variadic {
@@ -246,34 +328,46 @@ func FuncDeclString(fset *token.FileSet, fn *ast.FuncDecl) string {
 	}
 }
 
-// generate _m.Called() expression (calling into testify/mock.Called() method)
-func generateMockDotCalledExpr(fset *token.FileSet, fn *ast.FuncDecl) (string, string) {
-	paramInfos := ParamListDeclInfo(fset, fn.Type.Params)
+// generate m.Called() expression (calling into testify/mock.Called() method)
+func generateMockDotCalledExpr(
+	fset *token.FileSet,
+	paramInfos []*FieldDeclInfo,
+) (string, string) {
 
 	if len(paramInfos) == 0 {
-		return "_m.Called()", ""
+		return "m.Called()", ""
 	}
 
 	lastParam := paramInfos[len(paramInfos)-1]
 	if !lastParam.Variadic {
-		return fmt.Sprintf("_m.Called(%s)", ParamListInvokeString(paramInfos)), ""
+		return fmt.Sprintf("m.Called(%s)", ParamListInvokeString(paramInfos)), ""
 	}
 
-	if lastParam.Typ == "...interface{}" {
-		return fmt.Sprintf("_m.Called(%s)", ParamListInvokeString(paramInfos)), ""
+	if lastParam.Typ == "...interface{}" && len(paramInfos) == 1 {
+		return fmt.Sprintf("m.Called(%s...)", lastParam.Name), ""
 	}
 
-	// testify/mock.Called() accepts ...interface{}, if underlying variadic
-	// type is not interface{}, perform type-casting
-	setupBlock := fmt.Sprintf(`
-	_mc_VArg := make([]interface{}, len(%s))
-	for _mc_i := range %s {
-		_mc_VArg[_mc_i] = %s[_mc_i]
-	}
-`, lastParam.Name, lastParam.Name, lastParam.Name)
+	// testify/mock.Called() accepts ...interface{}, for variadic parameters,
+	// just convert it to slice
+	lines := []string{}
+	lines = append(lines, fmt.Sprintf(`
+	_mc_args := make([]interface{}, 0, %d+len(%s))
+	`, len(paramInfos)-1, lastParam.Name))
 
-	lastParam.Name = "_mc_VArg"
-	return fmt.Sprintf("_m.Called(%s)", ParamListInvokeString(paramInfos)), setupBlock
+	for i := 0; i < len(paramInfos)-1; i++ {
+		lines = append(lines, fmt.Sprintf(`
+	_mc_args = append(_mc_args, %s)
+	`, paramInfos[i].Name))
+	}
+
+	lines = append(lines, fmt.Sprintf(`
+	for _, _va := range %s {
+		_mc_args = append(_mc_args, _va)
+	}
+	`, lastParam.Name))
+
+	setupBlock := strings.Join(lines, "")
+	return "m.Called(_mc_args...)", setupBlock
 }
 
 type ReturnFieldBindingSpec struct {
@@ -290,11 +384,12 @@ type ReturnFieldBinding struct {
 
 func buildReturnFieldBinding(
 	fset *token.FileSet,
-	fn *ast.FuncDecl,
+	fnParams *ast.FieldList,
+	fnReturns *ast.FieldList,
 ) *ReturnFieldBinding {
 	fields := []ReturnFieldBindingSpec{}
 
-	for _, f := range fn.Type.Results.List {
+	for _, f := range fnReturns.List {
 		name := ""
 		if f.Names != nil {
 			name = f.Names[0].Name
@@ -305,7 +400,7 @@ func buildReturnFieldBinding(
 			Name: name,
 			Typ:  typ,
 			TypeFuncDecl: fmt.Sprintf("func(%s) %s",
-				ParamListTypeOnlyDeclString(fset, fn.Type.Params),
+				ParamListTypeOnlyDeclString(fset, fnParams),
 				typ,
 			),
 		})
@@ -316,33 +411,44 @@ func buildReturnFieldBinding(
 	}
 }
 
-// MockFunc generates a mocking method on mockClz class for a give AST FuncDecl object
-func MockFunc(writer io.Writer, mockClz string, fset *token.FileSet, fn *ast.FuncDecl) {
-	retDecl := ReturnDeclString(fset, fn.Type.Results)
+// MockFunc generates a mocking method on mockClz class
+func MockFunc(
+	writer io.Writer,
+	mockClz string,
+	fset *token.FileSet,
+	fnName string,
+	fnParams *ast.FieldList,
+	fnReturns *ast.FieldList,
+) {
+	paramInfos := ParamListDeclInfo(fset, fnParams)
+
+	// FuncDecl of method definition from interface may come in unnamed
+	// make sure that we name these parameters before code generation
+	ParamInfoListFixup(paramInfos)
+
+	retDecl := ReturnDeclString(fset, fnReturns)
 	if retDecl != "" {
 		fmt.Fprintf(
-			writer, "func (_m *%s) %s(%s) %s {\n",
+			writer, "func (m *%s) %s(%s) %s {\n",
 			mockClz,
-			fn.Name.Name,
-			ParamListDeclString(fset, fn.Type.Params),
+			fnName,
+			ParamInfoListDeclString(paramInfos),
 			retDecl,
 		)
 	} else {
 		fmt.Fprintf(
-			writer, "func (_m *%s) %s(%s) {\n",
+			writer, "func (m *%s) %s(%s) {\n",
 			mockClz,
-			fn.Name.Name,
-			ParamListDeclString(fset, fn.Type.Params),
+			fnName,
+			ParamInfoListDeclString(paramInfos),
 		)
 	}
 
-	calledExpr, calledExprSetup := generateMockDotCalledExpr(fset, fn)
+	calledExpr, calledExprSetup := generateMockDotCalledExpr(fset, paramInfos)
 	fmt.Fprintf(writer, "%s", calledExprSetup)
 
-	if len(fn.Type.Results.List) > 0 {
-		paramInfos := ParamListDeclInfo(fset, fn.Type.Params)
-
-		binding := buildReturnFieldBinding(fset, fn)
+	if len(fnReturns.List) > 0 {
+		binding := buildReturnFieldBinding(fset, fnParams, fnReturns)
 		binding.MockCallExpr = calledExpr
 		binding.FuncInvokeParamsExpr = ParamListInvokeString(paramInfos)
 
