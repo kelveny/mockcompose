@@ -115,7 +115,7 @@ func (g *generator) matchMethod(fnName string) matchType {
 	return MATCH_NONE
 }
 
-func (g *generator) composeMock(fnSpec *ast.FuncDecl, writer io.Writer) {
+func (g *generator) composeMock(writer io.Writer, fset *token.FileSet, fnSpec *ast.FuncDecl) {
 	// TODO we may directly generate mocking implementation later
 	// to remove dependencies to mockery tool
 }
@@ -305,7 +305,7 @@ func (g *generator) generateInternal(
 					writer.Write([]byte("\n\n"))
 				} else if matchType == MATCH_MOCK {
 					// generate mocked method
-					g.composeMock(fnSpec, writer)
+					g.composeMock(writer, fset, fnSpec)
 				}
 			} else {
 				// for any non-function declaration, export only imports
