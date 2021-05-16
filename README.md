@@ -10,9 +10,9 @@ In the example, SomeFooMethod() will be called to run real implementation code, 
 Without such granularity control, we sometimes have to rely heavily on end to end integration tests for Go class implementation. The integration test approach involves a lot of effort to bring up either real or simulated runtime with third-party dependencies, it is also hard and tedious to perform fault injections.
 
 ## Solution
-[mockery](https://github.com/vektra/mockery) is a very nice tool that allows developers to generate mocking interface implementation in Go, however, it is not enough to satisfy the requriements mentioned above. [mockcompose](https://github.com/kelveny/mockcompose) can be used to fill the gap, it generates mocking implementation for Go classes, interfaces and functions.
+[mockery](https://github.com/vektra/mockery) is a very nice tool that allows developers to generate mocking interface implementation in Go, however, it is not enough to satisfy the requriements mentioned above. `mockcompose` can be used to fill the gap, it generates mocking implementation for Go classes, interfaces and functions.
 
-## Installation
+## Install
 ```
 go install github.com/kelveny/mockcompose
 ```
@@ -42,15 +42,15 @@ go install github.com/kelveny/mockcompose
   -version
         if set, print version information
 ```
-If -pkg option is omitted, mockcompose will derive Go package name automatically from current working directory.
+`-pkg` option is usually omitted, `mockcompose` will derive Go package name automatically from current working directory.
 
-You can use multiple -real and -mock options to specify a set of real class method functions to clone and another set of class method functions to mock.
+You can use multiple `-real` and `-mock` options to specify a set of real class method functions to clone and another set of class method functions to mock.
 
-mockcompose is recommended to be used in 'go generate':
+`mockcompose` is recommended to be used in `go generate`:
 ```go
 //go:generate mockcompose -n testFoo -c foo -real Foo -mock Bar
 ```
-In the example, mockcompose will generate a testFoo class with Foo() method function be cloned from real foo class implementation, and Bar() method function be mocked.
+In the example, `mockcompose` will generate a testFoo class with Foo() method function be cloned from real foo class implementation, and Bar() method function be mocked.
 
 source Go class code: foo.go
 ```go
@@ -84,14 +84,14 @@ func (f *foo) Bar() bool {
 }
 ```
 
-go generate configuration: mocks.go
+`go generate` configuration: mocks.go
 ```go
 //go:generate mockcompose -n testFoo -c foo -real Foo -mock Bar
 //go:generate mockcompose -n FooMock -i Foo
 package foo
 ```
 
-mockcompose generated code: mockc_testFoo_test.go
+`mockcompose` generated code: mockc_testFoo_test.go
 ```go
 //
 // CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
@@ -150,4 +150,4 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-When a class method has external callouts to imported functions from other packages, mockcompose also offers function level mock generation. Please check out [mockfn](https://github.com/kelveny/mockcompose/tree/main/test/mockfn) for details.
+When a class method has external callouts to imported functions from other packages, `mockcompose` also offers function level mock generation. Please check out [mockfn](https://github.com/kelveny/mockcompose/tree/main/test/mockfn) for details.
