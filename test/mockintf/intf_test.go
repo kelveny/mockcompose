@@ -141,3 +141,44 @@ func TestMockCallFooBar(t *testing.T) {
 	assert.True(s == "mocked")
 	f.AssertNumberOfCalls(t, "Bar", 1)
 }
+
+func TestMockCollapsedParams(t *testing.T) {
+	assert := require.New(t)
+
+	m := MockSampleInterface{}
+	m.On("CollapsedParams",
+		mock.Anything,
+		mock.Anything,
+	).Return("mocked")
+
+	s := m.CollapsedParams([]byte("param1"), []byte("param2"))
+	assert.True(s == "mocked")
+}
+
+func TestMockCollapsedReturns(t *testing.T) {
+	assert := require.New(t)
+
+	m := MockSampleInterface{}
+	m.On("CollapsedReturns").Return(
+		func() int {
+			return 100
+		},
+		200,
+		"mocked",
+	)
+
+	x, y, s := m.CollapsedReturns()
+	assert.True(x == 100)
+	assert.True(y == 200)
+	assert.True(s == "mocked")
+}
+
+func TestMockVoidReturn(t *testing.T) {
+	assert := require.New(t)
+
+	m := MockSampleInterface{}
+	m.On("VoidReturn").Once()
+
+	m.VoidReturn()
+	assert.True(m.AssertNumberOfCalls(t, "VoidReturn", 1))
+}

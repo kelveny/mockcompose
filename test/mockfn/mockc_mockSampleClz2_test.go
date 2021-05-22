@@ -14,8 +14,8 @@ type mockSampleClz2 struct {
 }
 
 func (c *mockSampleClz2) methodThatUsesMultileGlobalFunctions(format string, args ...interface{}) string {
-	fmt := fmtMock
 	json := jsonMock
+	fmt := fmtMock
 
 	b, _ := json.Marshal(format)
 	return string(b) + fmt.Sprintf(format, args...)

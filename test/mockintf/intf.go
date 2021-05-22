@@ -10,6 +10,7 @@ import (
 )
 
 type SampleInterface interface {
+	// test unnamed parameters
 	Unnamed(string, int, chan<- string) error
 
 	// test method/function with variadic parameters
@@ -20,6 +21,15 @@ type SampleInterface interface {
 
 	// test cross-package imports
 	CallFooBar(f foo.Foo) (bool, string)
+
+	// test collapsed paramemters
+	CollapsedParams(arg1, arg2 []byte) string
+
+	// test collapsed returns
+	CollapsedReturns() (x, y int, z string)
+
+	// test void return
+	VoidReturn()
 }
 
 type SampleInterfaceImpl struct{}
@@ -63,6 +73,17 @@ func (sii *SampleInterfaceImpl) Variadic4(args ...interface{}) string {
 
 func (sii *SampleInterfaceImpl) CallFooBar(f foo.Foo) (bool, string) {
 	return f.Bar(), "ok"
+}
+
+func (sii *SampleInterfaceImpl) CollapsedParams(arg1, arg2 []byte) string {
+	return string(arg1) + string(arg2)
+}
+
+func (sii *SampleInterfaceImpl) CollapsedReturns() (x, y int, z string) {
+	return 1, 2, ""
+}
+
+func (sii *SampleInterfaceImpl) VoidReturn() {
 }
 
 func toJson(o interface{}) string {

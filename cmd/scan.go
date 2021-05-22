@@ -5,7 +5,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -142,7 +141,7 @@ func scanFileToGenerate(
 	g parsedFileGenerator,
 	options *commandOptions,
 	pkgDir string,
-	fileInfo fs.FileInfo,
+	fileInfo os.FileInfo,
 ) {
 	if strings.HasSuffix(fileInfo.Name(), ".go") &&
 		!strings.HasSuffix(fileInfo.Name(), "_test.go") {

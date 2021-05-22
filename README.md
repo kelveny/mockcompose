@@ -5,7 +5,7 @@ It seems to be quite difficult in Go to do something which is relatively easy in
 FooService fooService = PowerMockito.mock(FooService.class);
 PowerMockito.doCallRealMethod().when(fooService).SomeFooMethod());
 ```
-In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us a fine-grained control in unit testing.
+In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us fine-grained control in unit testing.
 
 Without such granularity control, we sometimes have to rely heavily on end to end integration tests for Go class implementation. The integration test approach involves a lot of effort to bring up either real or simulated runtime with third-party dependencies, it is also hard and tedious to perform fault injections.
 

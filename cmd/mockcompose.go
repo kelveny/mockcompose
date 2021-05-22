@@ -103,6 +103,11 @@ func Execute() {
 
 	} else {
 		if len(methodsToMock) == 0 {
+			if len(methodsToClone) > 0 {
+				logger.Log(logger.ERROR, "Please use -real option together with -c option\n")
+				os.Exit(1)
+			}
+
 			logger.Log(logger.ERROR, "Please specify at least one mock function name with -mock option\n")
 			os.Exit(1)
 		}

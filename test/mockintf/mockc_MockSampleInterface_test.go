@@ -150,3 +150,65 @@ func (m *MockSampleInterface) CallFooBar(f foo.Foo) (bool, string) {
 	return _r0, _r1
 
 }
+
+func (m *MockSampleInterface) CollapsedParams(arg1 []byte, arg2 []byte) string {
+
+	_mc_ret := m.Called(arg1, arg2)
+
+	var _r0 string
+
+	if _rfn, ok := _mc_ret.Get(0).(func([]byte, []byte) string); ok {
+		_r0 = _rfn(arg1, arg2)
+	} else {
+		if _mc_ret.Get(0) != nil {
+			_r0 = _mc_ret.Get(0).(string)
+		}
+	}
+
+	return _r0
+
+}
+
+func (m *MockSampleInterface) CollapsedReturns() (x int, y int, z string) {
+
+	_mc_ret := m.Called()
+
+	var _r0 int
+
+	if _rfn, ok := _mc_ret.Get(0).(func() int); ok {
+		_r0 = _rfn()
+	} else {
+		if _mc_ret.Get(0) != nil {
+			_r0 = _mc_ret.Get(0).(int)
+		}
+	}
+
+	var _r1 int
+
+	if _rfn, ok := _mc_ret.Get(1).(func() int); ok {
+		_r1 = _rfn()
+	} else {
+		if _mc_ret.Get(1) != nil {
+			_r1 = _mc_ret.Get(1).(int)
+		}
+	}
+
+	var _r2 string
+
+	if _rfn, ok := _mc_ret.Get(2).(func() string); ok {
+		_r2 = _rfn()
+	} else {
+		if _mc_ret.Get(2) != nil {
+			_r2 = _mc_ret.Get(2).(string)
+		}
+	}
+
+	return _r0, _r1, _r2
+
+}
+
+func (m *MockSampleInterface) VoidReturn() {
+
+	m.Called()
+
+}
