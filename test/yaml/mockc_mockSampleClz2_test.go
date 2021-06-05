@@ -1,0 +1,22 @@
+//
+// CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
+// THIS FILE SHOULD NOT BE EDITED BY HAND
+//
+package yaml
+
+import (
+	"github.com/stretchr/testify/mock"
+)
+
+type mockSampleClz2 struct {
+	sampleClz
+	mock.Mock
+}
+
+func (c *mockSampleClz2) methodThatUsesMultileGlobalFunctions(format string, args ...interface{}) string {
+	fmt := fmtMock
+	json := jsonMock
+
+	b, _ := json.Marshal(format)
+	return string(b) + fmt.Sprintf(format, args...)
+}

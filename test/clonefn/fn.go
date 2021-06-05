@@ -25,7 +25,7 @@ func functionThatUsesMultileGlobalFunctions(
 	// skip fansy logic...
 	//
 
-	// call out to a global function in fmt package and filepath package
+	// call out to a global function in fmt package and json package
 	b, _ := json.Marshal(format)
 	return string(b) + fmt.Sprintf(format, args...)
 }
@@ -38,7 +38,7 @@ func functionThatUsesMultileGlobalFunctions2(
 	// skip fansy logic...
 	//
 
-	// call out to a global function in fmt package and filepath package
+	// call out to a global function in fmt package and json package
 	b, _ := json.Marshal(format)
 	return string(b) + fmt.Sprintf(format, args...)
 }

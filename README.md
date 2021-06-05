@@ -20,10 +20,11 @@ go install github.com/kelveny/mockcompose
 ## Usage
 
 ```
-  mockcompose can be launched with following options
-
+mockcompose generates mocking implementation for Go classes, interfaces and functions.
   -c string
         name of the source class to generate against
+  -help
+        if set, print usage information
   -i string
         name of the source interface to generate against
   -mock value
@@ -305,4 +306,61 @@ func TestMockVariadic(t *testing.T) {
 <br/>
 
 ### __Answer__: If you've gone through FAQ answers above, you know that `mockcompose` of course can!
+<br/>
+
+### 5. How do I configure `go generate` in YAML?
+<br/>
+
+### __Answer__: Check out `mockcompose` self-test example [yaml](https://github.com/kelveny/mockcompose/tree/main/test/yaml)
+<br/>
+
+`go generate` configuration: mocks.go
+```go
+//go:generate mockcompose
+package yaml
+```
+
+`go generate` YAML configuration file: .mockcompose.yaml
+```yaml
+mockcompose:
+  - name: mockFmt
+    testOnly: true
+    sourcePkg: fmt
+    mock: 
+      - Sprintf
+  - name: mockJson
+    testOnly: true
+    sourcePkg: encoding/json
+    mock: 
+      - Marshal
+  - name: mockSampleClz
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesGlobalFunction,fmt=fmtMock"
+  - name: mockSampleClz2
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock"
+  - name: mockSampleClz3
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock"
+  - name: MockSampleInterface
+    testOnly: true
+    interfaceName: SampleInterface
+  - name: mockFoo
+    testOnly: true
+    interfaceName: Foo
+    sourcePkg: github.com/kelveny/mockcompose/test/foo
+  - name: mockFmtclonedFuncs
+    testOnly: true
+    real: 
+      - "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock" 
+      - "functionThatUsesGlobalFunction,fmt=fmtMock" 
+      - "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"
+```
+If `mockcompose` detects `.mockcompose.yaml` or `.mockcompose.yml` in package directory, it will load code generation configuration from the file.
 

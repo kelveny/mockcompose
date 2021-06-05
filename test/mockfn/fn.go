@@ -28,7 +28,7 @@ func (c *sampleClz) methodThatUsesMultileGlobalFunctions(
 	// skip fansy logic...
 	//
 
-	// call out to a global function in fmt package and filepath package
+	// call out to a global function in fmt package and json package
 	b, _ := json.Marshal(format)
 	return string(b) + fmt.Sprintf(format, args...)
 }

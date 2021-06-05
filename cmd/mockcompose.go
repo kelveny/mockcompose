@@ -3,7 +3,11 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/kelveny/mockcompose/pkg/gofile"
 	"github.com/kelveny/mockcompose/pkg/logger"
@@ -24,6 +28,106 @@ mockcompose generates mocking implementation for Go classes, interfaces and func
 	os.Exit(1)
 }
 
+func loadConfig() *Config {
+	pkgDir, err := filepath.Abs("")
+	logger.Log(logger.VERBOSE, "Check directory %s for YAML configuration\n", pkgDir)
+	if err != nil {
+		logger.Log(logger.ERROR, "Error in accessing file system. error: %s\n", err)
+		os.Exit(1)
+	}
+
+	if cfg := loadYamlConfig(filepath.Join(pkgDir, ".mockcompose.yaml")); cfg != nil {
+		return cfg
+	}
+
+	if cfg := loadYamlConfig(filepath.Join(pkgDir, ".mockcompose.yml")); cfg != nil {
+		return cfg
+	}
+
+	return nil
+}
+
+func loadYamlConfig(yamlFile string) *Config {
+	yamlConfig, err := ioutil.ReadFile(yamlFile)
+	if err == nil {
+		cfg := Config{}
+
+		err := yaml.Unmarshal(yamlConfig, &cfg)
+		if err != nil {
+			logger.Log(logger.ERROR, "Failed to load YAML config: %s\n", err)
+		}
+		return &cfg
+	}
+
+	return nil
+}
+
+func executeOptions(options *CommandOptions) {
+	var g parsedFileGenerator
+
+	if options.ClzName != "" {
+		if len(options.MethodsToClone) == 0 {
+			logger.Log(logger.ERROR, "Please specify at least one real method name with -real option\n")
+			os.Exit(1)
+		}
+
+		g = &classMethodGenerator{
+			clzName:        options.ClzName,
+			mockPkgName:    options.MockPkg,
+			mockName:       options.MockName,
+			methodsToClone: options.MethodsToClone,
+			methodsToMock:  options.MethodsToMock,
+		}
+	} else if options.IntfName != "" {
+		g = &interfaceMockGenerator{
+			mockPkgName: options.MockPkg,
+			mockName:    options.MockName,
+			intfName:    options.IntfName,
+		}
+
+		if options.SrcPkg != "" {
+			scanPackageToGenerate(g.(loadedPackageGenerator), options)
+			return
+		}
+	} else {
+		if len(options.MethodsToMock) == 0 && len(options.MethodsToClone) == 0 {
+			logger.Log(logger.ERROR, "no function to mock or clone\n")
+			os.Exit(1)
+		}
+
+		if len(options.MethodsToMock) > 0 && len(options.MethodsToClone) > 0 {
+			logger.Log(logger.ERROR, "option -real and option -mock are exclusive in function clone generation\n")
+			os.Exit(1)
+		}
+
+		if len(options.MethodsToClone) > 0 {
+			if options.SrcPkg != "" {
+				logger.Log(logger.PROMPT,
+					"No source package support in function clone generation, ignore source package %s\n",
+					options.SrcPkg)
+			}
+			g = &functionCloneGenerator{
+				mockPkgName:    options.MockPkg,
+				mockName:       options.MockName,
+				methodsToClone: options.MethodsToClone,
+			}
+		} else {
+			g = &functionMockGenerator{
+				mockPkgName:   options.MockPkg,
+				mockName:      options.MockName,
+				methodsToMock: options.MethodsToMock,
+			}
+
+			if options.SrcPkg != "" {
+				scanPackageToGenerate(g.(loadedPackageGenerator), options)
+				return
+			}
+		}
+	}
+
+	scanCWDToGenerate(g, options)
+}
+
 func Execute() {
 	var methodsToClone stringSlice
 	var methodsToMock stringSlice
@@ -31,6 +135,7 @@ func Execute() {
 	vb := flag.Bool("v", false, "if set, print verbose logging messages")
 	testOnly := flag.Bool("testonly", true, "if set, append _test to generated file name")
 	prtVersion := flag.Bool("version", false, "if set, print version information")
+	help := flag.Bool("help", false, "if set, print usage information")
 	mockName := flag.String("n", "", "name of the generated class")
 	mockPkg := flag.String("pkg", "", "name of the package that the generated class resides")
 	clzName := flag.String("c", "", "name of the source class to generate against")
@@ -46,10 +151,30 @@ func Execute() {
 		os.Exit(0)
 	}
 
+	if *help {
+		usage()
+		os.Exit(0)
+	}
+
 	if *vb {
 		logger.LogLevel = int(logger.VERBOSE)
 
 		logger.Log(logger.VERBOSE, "Set logging to verbose mode\n")
+	}
+
+	if cfg := loadConfig(); cfg != nil {
+		logger.Log(logger.VERBOSE, "Found mockcompose YAML configuration, ignore command line options\n")
+
+		derivedPkg := gofile.DerivePackage()
+		for _, options := range cfg.Mockcompose {
+			if options.MockPkg == "" {
+				options.MockPkg = derivedPkg
+			}
+
+			executeOptions(&options)
+		}
+
+		return
 	}
 
 	if *mockPkg == "" {
@@ -64,77 +189,16 @@ func Execute() {
 		os.Exit(1)
 	}
 
-	options := &commandOptions{
-		mockName,
-		mockPkg,
-		clzName,
-		intfName,
-		srcPkg,
-		testOnly,
-		methodsToClone,
-		methodsToMock,
+	options := &CommandOptions{
+		MockName:       *mockName,
+		MockPkg:        *mockPkg,
+		ClzName:        *clzName,
+		IntfName:       *intfName,
+		SrcPkg:         *srcPkg,
+		TestOnly:       *testOnly,
+		MethodsToClone: methodsToClone,
+		MethodsToMock:  methodsToMock,
 	}
 
-	var g parsedFileGenerator
-	if *clzName != "" {
-		if len(methodsToClone) == 0 {
-			logger.Log(logger.ERROR, "Please specify at least one real method name with -real option\n")
-			os.Exit(1)
-		}
-
-		g = &classMethodGenerator{
-			clzName:        *options.clzName,
-			mockPkgName:    *options.mockPkg,
-			mockName:       *options.mockName,
-			methodsToClone: options.methodsToClone,
-			methodsToMock:  options.methodsToMock,
-		}
-	} else if *intfName != "" {
-		g = &interfaceMockGenerator{
-			mockPkgName: *options.mockPkg,
-			mockName:    *options.mockName,
-			intfName:    *options.intfName,
-		}
-
-		if *options.srcPkg != "" {
-			scanPackageToGenerate(g.(loadedPackageGenerator), options)
-			return
-		}
-	} else {
-		if len(methodsToMock) == 0 && len(methodsToClone) == 0 {
-			logger.Log(logger.ERROR, "no function to mock or clone\n")
-			os.Exit(1)
-		}
-
-		if len(methodsToMock) > 0 && len(methodsToClone) > 0 {
-			logger.Log(logger.ERROR, "option -real and option -mock are exclusive in function clone generation\n")
-			os.Exit(1)
-		}
-
-		if len(methodsToClone) > 0 {
-			if *options.srcPkg != "" {
-				logger.Log(logger.PROMPT,
-					"No source package support in function clone generation, ignore source package %s\n",
-					*options.srcPkg)
-			}
-			g = &functionCloneGenerator{
-				mockPkgName:    *options.mockPkg,
-				mockName:       *options.mockName,
-				methodsToClone: *&options.methodsToClone,
-			}
-		} else {
-			g = &functionMockGenerator{
-				mockPkgName:   *options.mockPkg,
-				mockName:      *options.mockName,
-				methodsToMock: *&options.methodsToMock,
-			}
-
-			if *options.srcPkg != "" {
-				scanPackageToGenerate(g.(loadedPackageGenerator), options)
-				return
-			}
-		}
-	}
-
-	scanCWDToGenerate(g, options)
+	executeOptions(options)
 }

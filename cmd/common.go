@@ -27,16 +27,22 @@ package %s
 `
 )
 
-type commandOptions struct {
-	mockName *string
-	mockPkg  *string
-	clzName  *string
-	intfName *string
-	srcPkg   *string
-	testOnly *bool
+// must be public for it to be used in loading YAML configuration
+type CommandOptions struct {
+	MockName string `yaml:"name"`
+	MockPkg  string `yaml:"mockPkg"`
+	ClzName  string `yaml:"className"`
+	IntfName string `yaml:"interfaceName"`
+	SrcPkg   string `yaml:"sourcePkg"`
+	TestOnly bool   `yaml:"testOnly"`
 
-	methodsToClone stringSlice
-	methodsToMock  stringSlice
+	MethodsToClone []string `yaml:"real,flow"`
+	MethodsToMock  []string `yaml:"mock,flow"`
+}
+
+// must be public for it to be used in loading YAML configuration
+type Config struct {
+	Mockcompose []CommandOptions `yaml:"mockcompose,flow"`
 }
 
 type parsedFileGenerator interface {

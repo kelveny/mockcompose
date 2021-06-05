@@ -1,0 +1,39 @@
+mockcompose:
+  - name: mockFmt
+    testOnly: true
+    sourcePkg: fmt
+    mock: 
+      - Sprintf
+  - name: mockJson
+    testOnly: true
+    sourcePkg: encoding/json
+    mock: 
+      - Marshal
+  - name: mockSampleClz
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesGlobalFunction,fmt=fmtMock"
+  - name: mockSampleClz2
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock"
+  - name: mockSampleClz3
+    testOnly: true
+    className: sampleClz
+    real:
+      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock"
+  - name: MockSampleInterface
+    testOnly: true
+    interfaceName: SampleInterface
+  - name: mockFoo
+    testOnly: true
+    interfaceName: Foo
+    sourcePkg: github.com/kelveny/mockcompose/test/foo
+  - name: mockFmtclonedFuncs
+    testOnly: true
+    real: 
+      - "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock" 
+      - "functionThatUsesGlobalFunction,fmt=fmtMock" 
+      - "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"

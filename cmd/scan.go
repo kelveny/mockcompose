@@ -18,25 +18,25 @@ import (
 
 func scanPackageToGenerate(
 	g loadedPackageGenerator,
-	options *commandOptions,
+	options *CommandOptions,
 ) {
 	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedSyntax}
 
-	pkgs, err := packages.Load(cfg, *options.srcPkg)
+	pkgs, err := packages.Load(cfg, options.SrcPkg)
 	if err != nil {
 		logger.Log(logger.ERROR, "Error in loading package %s, error: %s\n",
-			*options.srcPkg, err,
+			options.SrcPkg, err,
 		)
 		return
 	}
 
-	logger.Log(logger.PROMPT, "Scan package %s...\n", *options.srcPkg)
+	logger.Log(logger.PROMPT, "Scan package %s...\n", options.SrcPkg)
 
 	var outputFileName string
-	if *options.testOnly {
-		outputFileName = fmt.Sprintf("mockc_%s_test.go", *options.mockName)
+	if options.TestOnly {
+		outputFileName = fmt.Sprintf("mockc_%s_test.go", options.MockName)
 	} else {
-		outputFileName = fmt.Sprintf("mockc_%s.go", *options.mockName)
+		outputFileName = fmt.Sprintf("mockc_%s.go", options.MockName)
 	}
 
 	output, err := os.OpenFile(
@@ -76,13 +76,13 @@ func scanPackageToGenerate(
 
 	gofile.FormatGoFile(outputFileName)
 
-	logger.Log(logger.PROMPT, "Done scan with package %s\n\n", *options.srcPkg)
+	logger.Log(logger.PROMPT, "Done scan with package %s\n\n", options.SrcPkg)
 }
 
 // scan current working directory
 func scanCWDToGenerate(
 	g parsedFileGenerator,
-	options *commandOptions,
+	options *CommandOptions,
 ) {
 	pkgDir, err := filepath.Abs("")
 	logger.Log(logger.VERBOSE, "Check directory %s for code generation\n", pkgDir)
@@ -107,7 +107,7 @@ func scanCWDToGenerate(
 // not in use
 func scanGoPathToGenerate(
 	g parsedFileGenerator,
-	options *commandOptions,
+	options *CommandOptions,
 ) {
 	// iterate candidates from package directory
 	gopathConfig := gofile.GetGoPathConfig()
@@ -115,7 +115,7 @@ func scanGoPathToGenerate(
 	for _, gopath := range strings.Split(gopathConfig, string(filepath.ListSeparator)) {
 		// support scanning of subfolder src/ and pkg/
 		for _, subFolder := range []string{"src", "pkg"} {
-			pkgDir, err := filepath.Abs(path.Join(gopath, subFolder, *options.mockPkg))
+			pkgDir, err := filepath.Abs(path.Join(gopath, subFolder, options.MockPkg))
 			logger.Log(logger.VERBOSE, "Check directory %s for code generation\n", pkgDir)
 			if err != nil {
 				logger.Log(logger.ERROR, "Error in accessing file system. error: %s\n", err)
@@ -139,7 +139,7 @@ func scanGoPathToGenerate(
 
 func scanFileToGenerate(
 	g parsedFileGenerator,
-	options *commandOptions,
+	options *CommandOptions,
 	pkgDir string,
 	fileInfo os.FileInfo,
 ) {
@@ -163,10 +163,10 @@ func scanFileToGenerate(
 		}
 
 		var outputFileName string
-		if *options.testOnly {
-			outputFileName = fmt.Sprintf("mockc_%s_test.go", *options.mockName)
+		if options.TestOnly {
+			outputFileName = fmt.Sprintf("mockc_%s_test.go", options.MockName)
 		} else {
-			outputFileName = fmt.Sprintf("mockc_%s.go", *options.mockName)
+			outputFileName = fmt.Sprintf("mockc_%s.go", options.MockName)
 		}
 
 		output, err := os.OpenFile(
