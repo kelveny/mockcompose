@@ -36,7 +36,7 @@ func Execute() {
 	clzName := flag.String("c", "", "name of the source class to generate against")
 	srcPkg := flag.String("p", "", "path of the source package in which to search interfaces and functions")
 	intfName := flag.String("i", "", "name of the source interface to generate against")
-	flag.Var(&methodsToClone, "real", "name of the method function to be cloned from source class")
+	flag.Var(&methodsToClone, "real", "name of the method function to be cloned from source class or source function")
 	flag.Var(&methodsToMock, "mock", "name of the function to be mocked")
 
 	flag.Parse()

@@ -35,7 +35,7 @@ go install github.com/kelveny/mockcompose
   -pkg string
         name of the package that the generated class resides
   -real value
-        name of the method function to be cloned from source class
+        name of the method function to be cloned from source class or source function
   -testonly
         if set, append _test to generated file name (default true)
   -v    if set, print verbose logging messages
@@ -150,4 +150,159 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-When a class method has external callouts to imported functions from other packages, `mockcompose` also offers function level mock generation. Please check out [mockfn](https://github.com/kelveny/mockcompose/tree/main/test/mockfn) for details.
+## FAQ
+
+### 1. My class method not only has callouts to sibling methods, but also callouts to functions imported from other packages, and I want to mock these imported functions, how can I do that?  
+<br/>
+
+### __Answer__: Check out `mockcompose` self-test example [mockfn](https://github.com/kelveny/mockcompose/tree/main/test/mockfn)
+<br/>
+
+`go generate` configuration: mocks.go
+```go
+//go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
+//go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
+//go:generate mockcompose -n mockSampleClz -c sampleClz -real "methodThatUsesGlobalFunction,fmt=fmtMock"
+//go:generate mockcompose -n mockSampleClz2 -c sampleClz -real "methodThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock"
+//go:generate mockcompose -n mockSampleClz3 -c sampleClz -real "methodThatUsesMultileGlobalFunctions,fmt=fmtMock"
+package mockfn
+```
+With this configuration, `mockcompose` generates Go classes for package `fmt` and `encoding/json`, the generated Go classes are equipped with mocked function implementation. `mockcompose` also clones the subject class method with local overrides, thus enables callouts to be redirected to mocked implementation.
+
+fn_test.go
+```go
+package mockfn
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+var jsonMock *mockJson = &mockJson{}
+var fmtMock *mockFmt = &mockFmt{}
+
+func TestSampleClz(t *testing.T) {
+	assert := require.New(t)
+
+	// setup function mocks
+	jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
+	fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
+
+	// inside mockSampleClz.methodThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
+	sc := mockSampleClz{}
+	assert.True(sc.methodThatUsesGlobalFunction("format", "value") == "mocked Sprintf")
+
+	// inside mockSampleClz2.methodThatUsesMultileGlobalFunctions: both json.Marshal()
+	// and fmt.Sprintf are mocked
+	sc2 := mockSampleClz2{}
+	assert.True(sc2.methodThatUsesMultileGlobalFunctions("format", "value") == "mocked Marshalmocked Sprintf")
+
+	// inside mockSampleClz3.methodThatUsesMultileGlobalFunctions: json.Marshal() is not mocked,
+	// fmt.Sprintf is mocked
+	sc3 := mockSampleClz3{}
+	assert.True(sc3.methodThatUsesMultileGlobalFunctions("format", "value") == "\"format\"mocked Sprintf")
+}
+```
+
+### 2. I want to test my function with callouts to functions imported from other packages, and I want to mock these imported functions, how can I do that?
+<br/>
+
+### __Answer__: Check out `mockcompose` self-test example [clonefn](https://github.com/kelveny/mockcompose/tree/main/test/clonefn)
+<br/>
+
+`go generate` configuration: mocks.go
+```
+//go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
+//go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
+//go:generate mockcompose -n clonedFuncs -real "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock" -real "functionThatUsesGlobalFunction,fmt=fmtMock" -real "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"
+package clonefn
+```
+With this configuration, `mockcompose` generates Go classes for package `fmt` and `encoding/json`, the generated Go classes are equipped with mocked function implementation. `mockcompose` also clones the subject function with local overrides, thus enables callouts to be redirected to mocked implementation.
+
+fn_test.go
+```go
+package clonefn
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+var jsonMock *mockJson = &mockJson{}
+var fmtMock *mockFmt = &mockFmt{}
+
+func TestClonedFuncs(t *testing.T) {
+	assert := require.New(t)
+
+	// setup function mocks
+	jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
+	fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
+
+	// inside functionThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
+	assert.True(functionThatUsesGlobalFunction_clone("format", "value") == "mocked Sprintf")
+
+	// inside functionThatUsesMultileGlobalFunctions: both json.Marshal()
+	// and fmt.Sprintf are mocked
+	assert.True(functionThatUsesMultileGlobalFunctions_clone("format", "value") == "mocked Marshalmocked Sprintf")
+
+	// inside functionThatUsesMultileGlobalFunctions2: json.Marshal() is not mocked,
+	// fmt.Sprintf is mocked
+	assert.True(functionThatUsesMultileGlobalFunctions2_clone("format", "value") == "\"format\"mocked Sprintf")
+}
+```
+
+### 3. Can mockcompose generate mocked implementation for interfaces?
+<br/>
+
+### __Answer__: Check out `mockcompose` self-test example [mockintf](https://github.com/kelveny/mockcompose/tree/main/test/mockintf)
+<br/>
+
+`go generate` configuration: mocks.go
+
+```go
+//go:generate mockcompose -n MockSampleInterface -i SampleInterface
+//go:generate mockcompose -n mockFoo -i Foo -p github.com/kelveny/mockcompose/test/foo
+package mockintf
+```
+With this configuration, `mockcompose` generates mocked interface implementation both for an interface defined in its own package and an interface defined in other package.
+
+intf_test.go
+```go
+package mockintf
+
+import (
+	"testing"
+
+	"github.com/kelveny/mockcompose/test/foo"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+func TestMockVariadic(t *testing.T) {
+	assert := require.New(t)
+
+	m := MockSampleInterface{}
+	m.On("Variadic",
+		"string1: %s, string2: %s, string3: %s",
+		"value1", "value2", "value3",
+	).Return("success")
+
+	assert.True(m.Variadic(
+		"string1: %s, string2: %s, string3: %s",
+		"value1", "value2", "value3",
+	) == "success")
+}
+
+...
+
+```
+
+### 4. Can mockcompose generate mocked implementation for functions?
+<br/>
+
+### __Answer__: If you've gone through FAQ answers above, you know that `mockcompose` of course can!
+
