@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/kelveny/mockcompose/pkg/gosyntax"
@@ -155,21 +156,33 @@ func WriteFuncWithLocalOverrides(
 	writer io.Writer,
 	fset *token.FileSet,
 	fnSpec *ast.FuncDecl,
+	fnName string,
 	overrides map[string]string,
 ) {
 	if len(overrides) == 0 {
 		format.Node(writer, fset, fnSpec)
 		writer.Write([]byte("\n\n"))
 	} else {
-		fmt.Fprintf(
-			writer,
-			"func (%s) %s",
-			gosyntax.ParamListDeclString(fset, fnSpec.Recv),
-			fnSpec.Name.Name,
-		)
+		if fnSpec.Recv != nil {
+			fmt.Fprintf(
+				writer,
+				"func (%s) %s",
+				gosyntax.ParamListDeclString(fset, fnSpec.Recv),
+				fnName,
+			)
+		} else {
+			fmt.Fprintf(
+				writer,
+				"func %s",
+				fnName,
+			)
+		}
 
 		var b bytes.Buffer
+		// fnSpec.Type -> func(params) (rets)
 		format.Node(&b, fset, fnSpec.Type)
+
+		// use everything after func
 		fmt.Fprint(writer, string(b.Bytes()[4:]))
 
 		b.Reset()
@@ -186,9 +199,18 @@ func WriteFuncWithLocalOverrides(
 
 func generateLocalOverrides(writer io.Writer, overrides map[string]string) {
 	if len(overrides) > 0 {
-		for k, v := range overrides {
+		keys := make([]string, len(overrides))
+		i := 0
+		for k := range overrides {
+			keys[i] = k
+			i++
+		}
+
+		sort.Strings(keys)
+
+		for _, k := range keys {
 			fmt.Fprintf(writer, `
-	%s := %s`, k, v)
+	%s := %s`, k, overrides[k])
 		}
 
 		fmt.Fprintf(writer, "\n")

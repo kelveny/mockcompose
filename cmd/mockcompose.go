@@ -86,7 +86,7 @@ func Execute() {
 			clzName:        *options.clzName,
 			mockPkgName:    *options.mockPkg,
 			mockName:       *options.mockName,
-			mothodsToClone: options.methodsToClone,
+			methodsToClone: options.methodsToClone,
 			methodsToMock:  options.methodsToMock,
 		}
 	} else if *intfName != "" {
@@ -100,27 +100,39 @@ func Execute() {
 			scanPackageToGenerate(g.(loadedPackageGenerator), options)
 			return
 		}
-
 	} else {
-		if len(methodsToMock) == 0 {
-			if len(methodsToClone) > 0 {
-				logger.Log(logger.ERROR, "Please use -real option together with -c option\n")
-				os.Exit(1)
-			}
-
-			logger.Log(logger.ERROR, "Please specify at least one mock function name with -mock option\n")
+		if len(methodsToMock) == 0 && len(methodsToClone) == 0 {
+			logger.Log(logger.ERROR, "no function to mock or clone\n")
 			os.Exit(1)
 		}
 
-		g = &functionMockGenerator{
-			mockPkgName:   *options.mockPkg,
-			mockName:      *options.mockName,
-			methodsToMock: *&options.methodsToMock,
+		if len(methodsToMock) > 0 && len(methodsToClone) > 0 {
+			logger.Log(logger.ERROR, "option -real and option -mock are exclusive in function clone generation\n")
+			os.Exit(1)
 		}
 
-		if *options.srcPkg != "" {
-			scanPackageToGenerate(g.(loadedPackageGenerator), options)
-			return
+		if len(methodsToClone) > 0 {
+			if *options.srcPkg != "" {
+				logger.Log(logger.PROMPT,
+					"No source package support in function clone generation, ignore source package %s\n",
+					*options.srcPkg)
+			}
+			g = &functionCloneGenerator{
+				mockPkgName:    *options.mockPkg,
+				mockName:       *options.mockName,
+				methodsToClone: *&options.methodsToClone,
+			}
+		} else {
+			g = &functionMockGenerator{
+				mockPkgName:   *options.mockPkg,
+				mockName:      *options.mockName,
+				methodsToMock: *&options.methodsToMock,
+			}
+
+			if *options.srcPkg != "" {
+				scanPackageToGenerate(g.(loadedPackageGenerator), options)
+				return
+			}
 		}
 	}
 

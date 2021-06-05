@@ -28,7 +28,7 @@ type classMethodGenerator struct {
 	mockPkgName string // package name that mocking class resides
 	mockName    string // the mocking composite class name
 
-	mothodsToClone []string // method function names that need to be cloned in mocking class
+	methodsToClone []string // method function names that need to be cloned in mocking class
 	methodsToMock  []string // method function names that need to be mocked
 }
 
@@ -64,8 +64,8 @@ func (g *classMethodGenerator) match(fnSpec *ast.FuncDecl) (bool, matchType) {
 }
 
 func (g *classMethodGenerator) matchMethod(fnName string) matchType {
-	if len(g.mothodsToClone) > 0 {
-		for _, name := range g.mothodsToClone {
+	if len(g.methodsToClone) > 0 {
+		for _, name := range g.methodsToClone {
 			// in format of methodName,pkg1=mockPkg1:pkg2=mockPkg2
 			name = strings.Split(name, ",")[0]
 			if name == fnName {
@@ -86,7 +86,7 @@ func (g *classMethodGenerator) matchMethod(fnName string) matchType {
 }
 
 func (g *classMethodGenerator) getMethodOverrides(fnName string) map[string]string {
-	for _, name := range g.mothodsToClone {
+	for _, name := range g.methodsToClone {
 		// in format of methodName,pkg1=mockPkg1:pkg2=mockPkg2
 		tokens := strings.Split(name, ",")
 		if tokens[0] == fnName {
@@ -181,7 +181,13 @@ func (g *classMethodGenerator) generateInternal(
 				if matchType == MATCH_CLONE {
 					// clone receiver-modified method
 					overrides := g.getMethodOverrides(fnSpec.Name.Name)
-					gogen.WriteFuncWithLocalOverrides(writer, fset, fnSpec, overrides)
+					gogen.WriteFuncWithLocalOverrides(
+						writer,
+						fset,
+						fnSpec,
+						fnSpec.Name.Name,
+						overrides,
+					)
 				} else if matchType == MATCH_MOCK {
 					// generate mocked method
 					g.composeMock(writer, fset, fnSpec)
