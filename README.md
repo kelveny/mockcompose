@@ -305,7 +305,17 @@ func TestMockVariadic(t *testing.T) {
 ### 4. Can mockcompose generate mocked implementation for functions?
 <br/>
 
-### __Answer__: If you've gone through FAQ answers above, you know that `mockcompose` of course can!
+### __Answer__: Yes. `mockcompose` can group a set of functions into a generated Go class, the generated Go class has embedded mock object through which function behavior can be mocked.
+
+`go generate` configuration: mocks.go
+```go
+//go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
+//go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
+```
+With this configuration, `mockcompose` can generate mocking Go class `mockFmt` and `mockJson` that implement `Sprintf` and `Marshal` respectively. Callers of these functions can then use method/function local overrides to connect callouts of method/function to these generated Go classes.
+
+These techniques have been used in examples of the questions above.
+
 <br/>
 
 ### 5. How do I configure `go generate` in YAML?
