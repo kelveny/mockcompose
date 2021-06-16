@@ -165,7 +165,7 @@ func Execute() {
 	if cfg := loadConfig(); cfg != nil {
 		logger.Log(logger.VERBOSE, "Found mockcompose YAML configuration, ignore command line options\n")
 
-		derivedPkg := gofile.DerivePackage()
+		derivedPkg := gofile.DerivePackage(false)
 		for _, options := range cfg.Mockcompose {
 			if options.MockPkg == "" {
 				options.MockPkg = derivedPkg
@@ -178,7 +178,7 @@ func Execute() {
 	}
 
 	if *mockPkg == "" {
-		*mockPkg = gofile.DerivePackage()
+		*mockPkg = gofile.DerivePackage(false)
 
 		logger.Log(logger.VERBOSE, "Derive package name as: %s\n", *mockPkg)
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
 
-func DerivePackage() string {
+func DerivePackage(anchor bool) string {
 	path, err := filepath.Abs("")
 	if err != nil {
 		logger.Log(logger.ERROR, "Error in accessing file system. error: %s\n", err)
@@ -18,7 +18,10 @@ func DerivePackage() string {
 	}
 
 	if path, ok := StripGopath(path); ok {
-		return path
+		if anchor {
+			return path
+		}
+		return filepath.Base(path)
 	}
 
 	return filepath.Base(path)
