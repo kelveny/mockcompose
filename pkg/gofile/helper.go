@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kelveny/mockcompose/pkg/logger"
+	"golang.org/x/tools/imports"
 )
 
 func DerivePackage(anchor bool) string {
@@ -88,6 +89,12 @@ func FormatGoFile(filePath string) {
 	bb, err := format.Source(b)
 	if err != nil {
 		logger.Log(logger.ERROR, "Error in formatting Go source %s, error: %s\n", filePath, err)
+		return
+	}
+
+	bb, err = imports.Process(filePath, bb, nil)
+	if err != nil {
+		logger.Log(logger.ERROR, "Error in formatting Go imports %s, error: %s\n", filePath, err)
 		return
 	}
 

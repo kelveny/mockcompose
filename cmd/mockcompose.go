@@ -83,6 +83,7 @@ func executeOptions(options *CommandOptions) {
 			mockPkgName: options.MockPkg,
 			mockName:    options.MockName,
 			intfName:    options.IntfName,
+			srcPkg:      options.SrcPkg,
 		}
 
 		if options.SrcPkg != "" {
@@ -116,6 +117,7 @@ func executeOptions(options *CommandOptions) {
 				mockPkgName:   options.MockPkg,
 				mockName:      options.MockName,
 				methodsToMock: options.MethodsToMock,
+				srcPkg:        options.SrcPkg,
 			}
 
 			if options.SrcPkg != "" {

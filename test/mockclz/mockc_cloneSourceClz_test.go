@@ -7,9 +7,10 @@ package mockclz
 import (
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/kelveny/mockcompose/test/foo"
 	"github.com/stretchr/testify/mock"
-	"strings"
 )
 
 type cloneSourceClz struct {

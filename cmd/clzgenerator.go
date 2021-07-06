@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/kelveny/mockcompose/pkg/gogen"
-	"github.com/kelveny/mockcompose/pkg/gosyntax"
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
 
@@ -114,13 +113,15 @@ func (g *classMethodGenerator) composeMock(
 	fset *token.FileSet,
 	fnSpec *ast.FuncDecl,
 ) {
-	gosyntax.MockFunc(
+	gogen.MockFunc(
 		writer,
+		g.mockPkgName,
 		g.mockName,
 		fset,
 		fnSpec.Name.Name,
 		fnSpec.Type.Params,
 		fnSpec.Type.Results,
+		nil,
 	)
 }
 

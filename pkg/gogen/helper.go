@@ -10,10 +10,34 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/kelveny/mockcompose/pkg/gosyntax"
+	"github.com/kelveny/mockcompose/pkg/gotype"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
+)
+
+const (
+	returnFieldTemplate = ` 
+	_mc_ret := {{ .MockCallExpr }}
+	{{ range $index, $f := .Fields }}
+	var _r{{ $index }} {{ $f.Typ }}
+
+	if _rfn, ok := _mc_ret.Get({{ $index }}).({{ $f.TypeFuncDecl }}); ok {
+		_r{{ $index }} = _rfn({{ $.FuncInvokeParamsExpr }})
+	} else {	
+	{{- if isErrorType $f }}
+		_r{{ $index }} = _mc_ret.Error({{ $index }})
+	{{- else }}
+		if _mc_ret.Get({{ $index }}) != nil {
+			_r{{ $index }} = _mc_ret.Get({{ $index }}).({{ $f.Typ }})
+		}
+	{{- end }}
+	}
+	{{ end }}
+	return {{ join . }}
+`
 )
 
 type ImportSpec struct {
@@ -28,11 +52,22 @@ func (s *ImportSpec) IsNameDefault() bool {
 func GetPackageImports(pkg *packages.Package) []ImportSpec {
 	var specs []ImportSpec
 
-	for _, p := range pkg.Imports {
-		specs = append(specs, ImportSpec{
-			Name: p.Name,
-			Path: p.PkgPath,
-		})
+	if pkg.Imports != nil {
+		for _, p := range pkg.Imports {
+			specs = append(specs, ImportSpec{
+				Name: p.Name,
+				Path: p.PkgPath,
+			})
+		}
+	} else {
+		if pkg.Types != nil {
+			for _, p := range pkg.Types.Imports() {
+				specs = append(specs, ImportSpec{
+					Name: p.Name(),
+					Path: p.Path(),
+				})
+			}
+		}
 	}
 
 	return specs
@@ -215,4 +250,183 @@ func generateLocalOverrides(writer io.Writer, overrides map[string]string) {
 
 		fmt.Fprintf(writer, "\n")
 	}
+}
+
+// generate m.Called() expression (calling into testify/mock.Called() method)
+func generateMockDotCalledExpr(
+	paramInfos []*gosyntax.FieldDeclInfo,
+) (string, string) {
+
+	if len(paramInfos) == 0 {
+		return "m.Called()", ""
+	}
+
+	lastParam := paramInfos[len(paramInfos)-1]
+	if !lastParam.Variadic {
+		return fmt.Sprintf("m.Called(%s)", gosyntax.ParamInfoListInvokeString(paramInfos)), ""
+	}
+
+	if lastParam.Typ == "...interface{}" && len(paramInfos) == 1 {
+		return fmt.Sprintf("m.Called(%s...)", lastParam.Name), ""
+	}
+
+	// testify/mock.Called() accepts ...interface{}, for variadic parameters,
+	// just convert it to slice
+	lines := []string{}
+	lines = append(lines, fmt.Sprintf(`
+	_mc_args := make([]interface{}, 0, %d+len(%s))
+	`, len(paramInfos)-1, lastParam.Name))
+
+	for i := 0; i < len(paramInfos)-1; i++ {
+		lines = append(lines, fmt.Sprintf(`
+	_mc_args = append(_mc_args, %s)
+	`, paramInfos[i].Name))
+	}
+
+	lines = append(lines, fmt.Sprintf(`
+	for _, _va := range %s {
+		_mc_args = append(_mc_args, _va)
+	}
+	`, lastParam.Name))
+
+	setupBlock := strings.Join(lines, "")
+	return "m.Called(_mc_args...)", setupBlock
+}
+
+type ReturnFieldBindingSpec struct {
+	Name         string
+	Typ          string
+	TypeFuncDecl string
+}
+
+type ReturnFieldBinding struct {
+	FuncInvokeParamsExpr string
+	MockCallExpr         string
+	Fields               []ReturnFieldBindingSpec
+}
+
+func buildReturnFieldBinding(
+	paramInfos []*gosyntax.FieldDeclInfo,
+	returnInfos []*gosyntax.FieldDeclInfo,
+) *ReturnFieldBinding {
+	fields := []ReturnFieldBindingSpec{}
+
+	for _, f := range returnInfos {
+		fields = append(fields, ReturnFieldBindingSpec{
+			Name: f.Name,
+			Typ:  f.Typ,
+			TypeFuncDecl: fmt.Sprintf("func(%s) %s",
+				gosyntax.ParamInfoListTypeOnlyDeclString(paramInfos),
+				f.Typ,
+			),
+		})
+	}
+
+	return &ReturnFieldBinding{
+		Fields: fields,
+	}
+}
+
+// MockFunc generates a mocking method on mockClz class
+// generate mockery (https://github.com/vektra/mockery) compatible mocking implementation
+// from syntax based declarations
+//
+func MockFunc(
+	writer io.Writer,
+	mockPkg string,
+	mockClz string,
+	fset *token.FileSet,
+	fnName string,
+	fnParams *ast.FieldList,
+	fnReturns *ast.FieldList,
+	signature *types.Signature,
+) {
+	paramInfos := gosyntax.ParamListDeclInfo(fset, fnParams)
+	returnInfos := gosyntax.ParamListDeclInfo(fset, fnReturns)
+
+	GenerateFuncMock(writer, mockPkg, mockClz, fnName, paramInfos, returnInfos, signature)
+}
+
+//
+// GenerateFuncMock generates function mock implementation based on FieldDeclInfo
+// abstraction
+//
+func GenerateFuncMock(
+	writer io.Writer,
+	mockPkg string,
+	mockClz string,
+	fnName string,
+	paramInfos []*gosyntax.FieldDeclInfo,
+	returnInfos []*gosyntax.FieldDeclInfo,
+	signature *types.Signature,
+) {
+	if signature != nil {
+		// override with inferred info from type signature
+		p := gotype.GetFuncParamInfosFromSignature(signature, mockPkg)
+		for index, info := range p {
+			if !strings.Contains(info.Typ, "invalid type") {
+				paramInfos[index] = p[index]
+			}
+		}
+
+		p = gotype.GetFuncReturnInfosFromSignature(signature, mockPkg)
+		for index, info := range p {
+			if !strings.Contains(info.Typ, "invalid type") {
+				returnInfos[index] = p[index]
+			}
+		}
+	}
+
+	// FuncDecl of method definition from interface may come in unnamed
+	// make sure that we name these parameters before code generation
+	gosyntax.ParamInfoListFixup(paramInfos)
+
+	retDecl := gosyntax.ReturnInfoListDeclString(returnInfos)
+	if retDecl != "" {
+		fmt.Fprintf(
+			writer, "func (m *%s) %s(%s) %s {\n",
+			mockClz,
+			fnName,
+			gosyntax.ParamInfoListDeclString(paramInfos),
+			retDecl,
+		)
+	} else {
+		fmt.Fprintf(
+			writer, "func (m *%s) %s(%s) {\n",
+			mockClz,
+			fnName,
+			gosyntax.ParamInfoListDeclString(paramInfos),
+		)
+	}
+
+	calledExpr, calledExprSetup := generateMockDotCalledExpr(paramInfos)
+	fmt.Fprintf(writer, "%s", calledExprSetup)
+
+	if len(returnInfos) > 0 {
+		binding := buildReturnFieldBinding(paramInfos, returnInfos)
+		binding.MockCallExpr = calledExpr
+		binding.FuncInvokeParamsExpr = gosyntax.ParamInfoListInvokeString(paramInfos)
+
+		t := template.Must(template.New("MockCompose").
+			Funcs(template.FuncMap{
+				"isErrorType": func(spec ReturnFieldBindingSpec) bool {
+					return spec.Typ == "error"
+				},
+
+				"join": func(binding *ReturnFieldBinding) string {
+					s := []string{}
+					for i := range binding.Fields {
+						s = append(s, fmt.Sprintf("_r%d", i))
+					}
+
+					return strings.Join(s, ", ")
+				},
+			}).
+			Parse(returnFieldTemplate))
+		t.Execute(writer, binding)
+	} else {
+		fmt.Fprintf(writer, "\n\t%s\n", calledExpr)
+	}
+
+	fmt.Fprintf(writer, "\n}\n")
 }

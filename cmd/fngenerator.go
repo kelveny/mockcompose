@@ -10,6 +10,7 @@ import (
 
 	"github.com/kelveny/mockcompose/pkg/gogen"
 	"github.com/kelveny/mockcompose/pkg/gosyntax"
+	"github.com/kelveny/mockcompose/pkg/gotype"
 	"github.com/kelveny/mockcompose/pkg/logger"
 	"golang.org/x/tools/go/packages"
 )
@@ -18,6 +19,7 @@ type functionMockGenerator struct {
 	mockPkgName   string   // package name that mocking class resides
 	mockName      string   // the mocking composite class name
 	methodsToMock []string // function names that need to be mocked
+	srcPkg        string
 }
 
 // use compiler to enforce interface compliance
@@ -41,13 +43,15 @@ func (g *functionMockGenerator) generate(
 				bufWriter.Write([]byte(fmt.Sprintf("package %s\n\n", g.mockPkgName)))
 			}
 
-			gosyntax.MockFunc(
+			gogen.MockFunc(
 				bufWriter,
+				g.mockPkgName,
 				g.mockName,
 				fset,
 				fnDecl.Name.Name,
 				fnDecl.Type.Params,
 				fnDecl.Type.Results,
+				nil,
 			)
 		}
 	})
@@ -100,16 +104,24 @@ func (g *functionMockGenerator) generateViaLoadedPackage(
 				bufWriter.Write([]byte(fmt.Sprintf("package %s\n\n", g.mockPkgName)))
 
 				imports := gogen.GetPackageImports(pkg)
+				if g.srcPkg != "" {
+					imports = append(imports, gogen.ImportSpec{
+						Name: "",
+						Path: g.srcPkg,
+					})
+				}
 				gogen.WriteImportDecls(bufWriter, imports)
 			}
 
-			gosyntax.MockFunc(
+			gogen.MockFunc(
 				bufWriter,
+				g.mockPkgName,
 				g.mockName,
 				fset,
 				fnDecl.Name.Name,
 				fnDecl.Type.Params,
 				fnDecl.Type.Results,
+				gotype.FindFuncSignature(pkg, fnDecl.Name.Name),
 			)
 		}
 	})

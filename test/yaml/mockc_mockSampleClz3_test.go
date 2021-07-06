@@ -6,6 +6,7 @@ package yaml
 
 import (
 	"encoding/json"
+
 	"github.com/stretchr/testify/mock"
 )
 

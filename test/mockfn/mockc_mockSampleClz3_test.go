@@ -6,6 +6,7 @@ package mockfn
 
 import (
 	"encoding/json"
+
 	"github.com/stretchr/testify/mock"
 )
 
