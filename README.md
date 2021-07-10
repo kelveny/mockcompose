@@ -1,16 +1,21 @@
 # mockcompose
 
-It seems to be quite difficult in Go to do something which is relatively easy in other object oriented languages. For example, in Java, we can mix real method call with mocked sibling method calls like this:
+`mockcompose` was originally built to address a Go anti-pattern use case scenario. To be exact, the example can be described with following Java example:
+
+in Java, we can mix real method call with mocked sibling method calls like this:
 ```java
 FooService fooService = PowerMockito.mock(FooService.class);
 PowerMockito.doCallRealMethod().when(fooService).SomeFooMethod());
 ```
-In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us fine-grained control in unit testing.
+In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us fine-grained control in unit testing, in world of Object Oriented languages.
 
-Without such granularity control, we sometimes have to rely heavily on end to end integration tests for Go class implementation. The integration test approach involves a lot of effort to bring up either real or simulated runtime with third-party dependencies, it is also hard and tedious to perform fault injections.
+Go is a first-class function programming language, Go best practices prefer small interfaces, in the extreme side of the spectrum, per-function interface would eliminate the needs of such usage pattern to be supported at all in mocking. This might be the reason why most Go mocking tools support only interface mocking.
 
-## Solution
-[mockery](https://github.com/vektra/mockery) is a very nice tool that allows developers to generate mocking interface implementation in Go, however, it is not enough to satisfy the requriements mentioned above. `mockcompose` can be used to fill the gap, it generates mocking implementation for Go classes, interfaces and functions.
+Nevertheless, if you ever come to here, you may be struggling in balancing the ideal world and practical world, try `mockcompose` to solve your immediate needs and you are recommended to follow Go best practices to refactor your code later, to avoid Go anti-pattern as mentioned above if possible. 
+
+`mockcompose` also supports generating [mockery](https://github.com/vektra/mockery) compatible code for Go interfaces and regular functions, which could pave the way for your code to evolve into ideal shape.
+
+Note: Go class here refers to `Go struct` with functions that take receiver objects of the `struct` type.
 
 ## Install
 ```
