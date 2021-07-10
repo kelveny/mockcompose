@@ -1,6 +1,6 @@
 # mockcompose
 
-`mockcompose` was originally built to address a Go anti-pattern use case scenario. To be exact, the example can be described with following Java example:
+`mockcompose` was originally built to address a Go anti-pattern use case scenario. To be exact, the use case can be described with following Java example:
 
 in Java, we can mix real method call with mocked sibling method calls like this:
 ```java
@@ -13,7 +13,7 @@ Go is a first-class function programming language, Go best practices prefer smal
 
 Nevertheless, if you ever come to here, you may be struggling in balancing the ideal world and practical world, try `mockcompose` to solve your immediate needs and you are recommended to follow Go best practices to refactor your code later, to avoid Go anti-pattern as mentioned above if possible. 
 
-`mockcompose` also supports generating [mockery](https://github.com/vektra/mockery) compatible code for Go interfaces and regular functions, which could pave the way for your code to evolve into ideal shape.
+`mockcompose` also supports generating [mockery](https://github.com/vektra/mockery) compatible code for Go interfaces and regular functions, which could help pave the way for your code to evolve into ideal shape.
 
 Note: Go class here refers to `Go struct` with functions that take receiver objects of the `struct` type.
 
