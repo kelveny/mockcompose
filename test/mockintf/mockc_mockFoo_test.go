@@ -1,7 +1,5 @@
-//
 // CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
 // THIS FILE SHOULD NOT BE EDITED BY HAND
-//
 package mockintf
 
 import (
