@@ -3,10 +3,12 @@
 `mockcompose` was originally built to address a Go anti-pattern use case scenario. To be exact, the use case can be described with following Java example:
 
 in Java, we can mix real method call with mocked sibling method calls like this:
+
 ```java
 FooService fooService = PowerMockito.mock(FooService.class);
 PowerMockito.doCallRealMethod().when(fooService).SomeFooMethod());
 ```
+
 In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us fine-grained control in unit testing, in world of Object Oriented languages.
 
 Go is a first-class function programming language, Go best practices prefer small interfaces, in the extreme side of the spectrum, per-function interface would eliminate the needs of such usage pattern to be supported at all in mocking. This might be the reason why most Go mocking tools support only interface mocking.
@@ -48,49 +50,54 @@ mockcompose generates mocking implementation for Go classes, interfaces and func
   -version
         if set, print version information
 ```
+
 `-pkg` option is usually omitted, `mockcompose` will derive Go package name automatically from current working directory.
 
 You can use multiple `-real` and `-mock` options to specify a set of real class method functions to clone and another set of class method functions to mock.
 
 `mockcompose` is recommended to be used in `go generate`:
+
 ```go
 //go:generate mockcompose -n testFoo -c foo -real Foo -mock Bar
 ```
+
 In the example, `mockcompose` will generate a testFoo class with Foo() method function be cloned from real foo class implementation, and Bar() method function be mocked.
 
 source Go class code: foo.go
+
 ```go
 package foo
 
 type Foo interface {
-	Foo() string
-	Bar() bool
+    Foo() string
+    Bar() bool
 }
 
 type foo struct {
-	name string
+    name string
 }
 
 var _ Foo = (*foo)(nil)
 
 func (f *foo) Foo() string {
-	if f.Bar() {
-		return "Overriden with Bar"
-	}
+    if f.Bar() {
+        return "Overriden with Bar"
+    }
 
-	return f.name
+    return f.name
 }
 
 func (f *foo) Bar() bool {
-	if f.name == "bar" {
-		return true
-	}
+    if f.name == "bar" {
+        return true
+    }
 
-	return false
+    return false
 }
 ```
 
 `go generate` configuration: mocks.go
+
 ```go
 //go:generate mockcompose -n testFoo -c foo -real Foo -mock Bar
 //go:generate mockcompose -n FooMock -i Foo
@@ -98,44 +105,43 @@ package foo
 ```
 
 `mockcompose` generated code: mockc_testFoo_test.go
+
 ```go
-//
 // CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
 // THIS FILE SHOULD NOT BE EDITED BY HAND
-//
 package foo
 
 import (
-	"github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/mock"
 )
 
 type testFoo struct {
-	foo
-	mock.Mock
+    foo
+    mock.Mock
 }
 
 func (f *testFoo) Foo() string {
-	if f.Bar() {
-		return "Overriden with Bar"
-	}
-	return f.name
+    if f.Bar() {
+        return "Overriden with Bar"
+    }
+    return f.name
 }
 
 func (m *testFoo) Bar() bool {
 
-	_mc_ret := m.Called()
+    _mc_ret := m.Called()
 
-	var _r0 bool
+    var _r0 bool
 
-	if _rfn, ok := _mc_ret.Get(0).(func() bool); ok {
-		_r0 = _rfn()
-	} else {
-		if _mc_ret.Get(0) != nil {
-			_r0 = _mc_ret.Get(0).(bool)
-		}
-	}
+    if _rfn, ok := _mc_ret.Get(0).(func() bool); ok {
+        _r0 = _rfn()
+    } else {
+        if _mc_ret.Get(0) != nil {
+            _r0 = _mc_ret.Get(0).(bool)
+        }
+    }
 
-	return _r0
+    return _r0
 
 }
 ```
@@ -165,6 +171,7 @@ func TestFoo(t *testing.T) {
 <br/>
 
 `go generate` configuration: mocks.go
+
 ```go
 //go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
 //go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
@@ -173,42 +180,44 @@ func TestFoo(t *testing.T) {
 //go:generate mockcompose -n mockSampleClz3 -c sampleClz -real "methodThatUsesMultileGlobalFunctions,fmt=fmtMock"
 package mockfn
 ```
+
 With this configuration, `mockcompose` generates Go classes for package `fmt` and `encoding/json`, the generated Go classes are equipped with mocked function implementation. `mockcompose` also clones the subject class method with local overrides, thus enables callouts to be redirected to mocked implementation.
 
 fn_test.go
+
 ```go
 package mockfn
 
 import (
-	"testing"
+    "testing"
 
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+    "github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/require"
 )
 
 var jsonMock *mockJson = &mockJson{}
 var fmtMock *mockFmt = &mockFmt{}
 
 func TestSampleClz(t *testing.T) {
-	assert := require.New(t)
+    assert := require.New(t)
 
-	// setup function mocks
-	jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
-	fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
+    // setup function mocks
+    jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
+    fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
 
-	// inside mockSampleClz.methodThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
-	sc := mockSampleClz{}
-	assert.True(sc.methodThatUsesGlobalFunction("format", "value") == "mocked Sprintf")
+    // inside mockSampleClz.methodThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
+    sc := mockSampleClz{}
+    assert.True(sc.methodThatUsesGlobalFunction("format", "value") == "mocked Sprintf")
 
-	// inside mockSampleClz2.methodThatUsesMultileGlobalFunctions: both json.Marshal()
-	// and fmt.Sprintf are mocked
-	sc2 := mockSampleClz2{}
-	assert.True(sc2.methodThatUsesMultileGlobalFunctions("format", "value") == "mocked Marshalmocked Sprintf")
+    // inside mockSampleClz2.methodThatUsesMultileGlobalFunctions: both json.Marshal()
+    // and fmt.Sprintf are mocked
+    sc2 := mockSampleClz2{}
+    assert.True(sc2.methodThatUsesMultileGlobalFunctions("format", "value") == "mocked Marshalmocked Sprintf")
 
-	// inside mockSampleClz3.methodThatUsesMultileGlobalFunctions: json.Marshal() is not mocked,
-	// fmt.Sprintf is mocked
-	sc3 := mockSampleClz3{}
-	assert.True(sc3.methodThatUsesMultileGlobalFunctions("format", "value") == "\"format\"mocked Sprintf")
+    // inside mockSampleClz3.methodThatUsesMultileGlobalFunctions: json.Marshal() is not mocked,
+    // fmt.Sprintf is mocked
+    sc3 := mockSampleClz3{}
+    assert.True(sc3.methodThatUsesMultileGlobalFunctions("format", "value") == "\"format\"mocked Sprintf")
 }
 ```
 
@@ -219,45 +228,48 @@ func TestSampleClz(t *testing.T) {
 <br/>
 
 `go generate` configuration: mocks.go
+
 ```
 //go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
 //go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
 //go:generate mockcompose -n clonedFuncs -real "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock" -real "functionThatUsesGlobalFunction,fmt=fmtMock" -real "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"
 package clonefn
 ```
+
 With this configuration, `mockcompose` generates Go classes for package `fmt` and `encoding/json`, the generated Go classes are equipped with mocked function implementation. `mockcompose` also clones the subject function with local overrides, thus enables callouts to be redirected to mocked implementation.
 
 fn_test.go
+
 ```go
 package clonefn
 
 import (
-	"testing"
+    "testing"
 
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+    "github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/require"
 )
 
 var jsonMock *mockJson = &mockJson{}
 var fmtMock *mockFmt = &mockFmt{}
 
 func TestClonedFuncs(t *testing.T) {
-	assert := require.New(t)
+    assert := require.New(t)
 
-	// setup function mocks
-	jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
-	fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
+    // setup function mocks
+    jsonMock.On("Marshal", mock.Anything).Return(([]byte)("mocked Marshal"), nil)
+    fmtMock.On("Sprintf", mock.Anything, mock.Anything).Return("mocked Sprintf")
 
-	// inside functionThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
-	assert.True(functionThatUsesGlobalFunction_clone("format", "value") == "mocked Sprintf")
+    // inside functionThatUsesMultileGlobalFunctions: fmt.Sprintf is mocked
+    assert.True(functionThatUsesGlobalFunction_clone("format", "value") == "mocked Sprintf")
 
-	// inside functionThatUsesMultileGlobalFunctions: both json.Marshal()
-	// and fmt.Sprintf are mocked
-	assert.True(functionThatUsesMultileGlobalFunctions_clone("format", "value") == "mocked Marshalmocked Sprintf")
+    // inside functionThatUsesMultileGlobalFunctions: both json.Marshal()
+    // and fmt.Sprintf are mocked
+    assert.True(functionThatUsesMultileGlobalFunctions_clone("format", "value") == "mocked Marshalmocked Sprintf")
 
-	// inside functionThatUsesMultileGlobalFunctions2: json.Marshal() is not mocked,
-	// fmt.Sprintf is mocked
-	assert.True(functionThatUsesMultileGlobalFunctions2_clone("format", "value") == "\"format\"mocked Sprintf")
+    // inside functionThatUsesMultileGlobalFunctions2: json.Marshal() is not mocked,
+    // fmt.Sprintf is mocked
+    assert.True(functionThatUsesMultileGlobalFunctions2_clone("format", "value") == "\"format\"mocked Sprintf")
 }
 ```
 
@@ -277,30 +289,31 @@ package mockintf
 With this configuration, `mockcompose` generates mocked interface implementation both for an interface defined in its own package and an interface defined in other package.
 
 intf_test.go
+
 ```go
 package mockintf
 
 import (
-	"testing"
+    "testing"
 
-	"github.com/kelveny/mockcompose/test/foo"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+    "github.com/kelveny/mockcompose/test/foo"
+    "github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/require"
 )
 
 func TestMockVariadic(t *testing.T) {
-	assert := require.New(t)
+    assert := require.New(t)
 
-	m := MockSampleInterface{}
-	m.On("Variadic",
-		"string1: %s, string2: %s, string3: %s",
-		"value1", "value2", "value3",
-	).Return("success")
+    m := MockSampleInterface{}
+    m.On("Variadic",
+        "string1: %s, string2: %s, string3: %s",
+        "value1", "value2", "value3",
+    ).Return("success")
 
-	assert.True(m.Variadic(
-		"string1: %s, string2: %s, string3: %s",
-		"value1", "value2", "value3",
-	) == "success")
+    assert.True(m.Variadic(
+        "string1: %s, string2: %s, string3: %s",
+        "value1", "value2", "value3",
+    ) == "success")
 }
 
 ...
@@ -313,10 +326,12 @@ func TestMockVariadic(t *testing.T) {
 ### __Answer__: Yes. `mockcompose` can group a set of functions into a generated Go class, the generated Go class has embedded mock object through which function behavior can be mocked.
 
 `go generate` configuration: mocks.go
+
 ```go
 //go:generate mockcompose -n mockFmt -p fmt -mock Sprintf
 //go:generate mockcompose -n mockJson -p encoding/json -mock Marshal
 ```
+
 With this configuration, `mockcompose` can generate mocking Go class `mockFmt` and `mockJson` that implement `Sprintf` and `Marshal` respectively. Callers of these functions can then use method/function local overrides to connect callouts of method/function to these generated Go classes.
 
 These techniques have been used in examples of the questions above.
@@ -330,12 +345,14 @@ These techniques have been used in examples of the questions above.
 <br/>
 
 `go generate` configuration: mocks.go
+
 ```go
 //go:generate mockcompose
 package yaml
 ```
 
 `go generate` YAML configuration file: .mockcompose.yaml
+
 ```yaml
 mockcompose:
   - name: mockFmt
@@ -377,5 +394,5 @@ mockcompose:
       - "functionThatUsesGlobalFunction,fmt=fmtMock" 
       - "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"
 ```
-If `mockcompose` detects `.mockcompose.yaml` or `.mockcompose.yml` in package directory, it will load code generation configuration from the file.
 
+If `mockcompose` detects `.mockcompose.yaml` or `.mockcompose.yml` in package directory, it will load code generation configuration from the file.
