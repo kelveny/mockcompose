@@ -215,6 +215,22 @@ func FuncDeclString(fset *token.FileSet, fn *ast.FuncDecl) string {
 	}
 }
 
+func FuncDeclReceiverSpec(fset *token.FileSet, fn *ast.FuncDecl) *ReceiverSpec {
+	if fn.Recv != nil {
+		recvStr := ParamListDeclString(fset, fn.Recv)
+
+		tokens := strings.Split(recvStr, " ")
+		if len(tokens) == 2 {
+			return &ReceiverSpec{
+				Name:     tokens[0],
+				TypeDecl: tokens[1],
+			}
+		}
+	}
+
+	return nil
+}
+
 // unify AST field list with simplified struct. Original thought was
 // to give an common interface for syntax-based and type-based implementations
 type FieldDeclInfo struct {
@@ -326,4 +342,34 @@ func ReturnInfoListDeclString(returns []*FieldDeclInfo) string {
 		}
 	}
 	return ""
+}
+
+type ReceiverSpec struct {
+	Name     string
+	TypeDecl string
+}
+
+// Get all methods of a "class"
+//
+// For methods with pointer receivers, prepend "*" to type name when passed in clzName
+func GetClassMethods(clzName string, fset *token.FileSet, f *ast.File) map[string]*ReceiverSpec {
+	methods := make(map[string]*ReceiverSpec)
+
+	ForEachFuncDeclInFile(f, func(funcDecl *ast.FuncDecl) {
+		if funcDecl.Recv != nil {
+			recvStr := ParamListDeclString(fset, funcDecl.Recv)
+
+			tokens := strings.Split(recvStr, " ")
+			if len(tokens) == 2 {
+				if tokens[1] == clzName {
+					methods[funcDecl.Name.Name] = &ReceiverSpec{
+						Name:     tokens[0],
+						TypeDecl: tokens[1],
+					}
+				}
+			}
+		}
+	})
+
+	return methods
 }
