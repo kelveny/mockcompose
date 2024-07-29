@@ -46,7 +46,7 @@ func TestCalleeDetection(t *testing.T) {
 		nil,
 		parser.ParseComments)
 
-	clzMethods := GetClassMethods("*dummyFoo", fset, node)
+	clzMethods := FindClassMethods("*dummyFoo", fset, node)
 
 	ForEachFuncDeclInFile(node, func(funcDecl *ast.FuncDecl) {
 		receiverSpec := FuncDeclReceiverSpec(fset, funcDecl)
@@ -54,7 +54,11 @@ func TestCalleeDetection(t *testing.T) {
 		if receiverSpec != nil && funcDecl.Name.Name == "Foo" && receiverSpec.TypeDecl == "*dummyFoo" {
 			body := funcDecl.Body
 
-			v := NewMethodCalleeVisitor(clzMethods, clzMethods[funcDecl.Name.Name].Name, funcDecl.Name.Name)
+			v := NewMethodCalleeVisitor(
+				clzMethods,
+				receiverSpec.Name,  // receiver variable name
+				funcDecl.Name.Name, // caller method function name
+			)
 			ast.Walk(v, body)
 
 			assert.Equal([]string{"Bar"}, v.GetPeerCallees())

@@ -34,8 +34,15 @@ type CommandOptions struct {
 	SrcPkg   string `yaml:"sourcePkg"`
 	TestOnly bool   `yaml:"testOnly"`
 
+	// For example content: "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock",
+	// it means to use "fmtMock" class as package "fmt", "jsonMock" class as package "json" in the cloned function
+	//
+	// For example content: "functionThatUsesMultileGlobalFunctions,this:.:fmt:json",
+	// it means to mock peer callee methods (this as psudo package name), auto generated callee packages for "." package, "fmt" amd "json" package
+
 	MethodsToClone []string `yaml:"real,flow"`
-	MethodsToMock  []string `yaml:"mock,flow"`
+
+	MethodsToMock []string `yaml:"mock,flow"`
 }
 
 // must be public for it to be used in loading YAML configuration

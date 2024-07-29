@@ -6,8 +6,8 @@ import (
 
 type MethodCalleeVisitor struct {
 	clzMethods map[string]*ReceiverSpec
-	receiver   string
-	name       string
+	receiver   string // receiver variable name
+	name       string // method function name
 
 	// peer callees (excluding the method myselfm but including peer methodd and callees via field function pointers)
 	thisClassCallees []string
@@ -29,6 +29,14 @@ func NewMethodCalleeVisitor(
 		receiver:   receiver,
 		name:       name,
 	}
+}
+
+func (v *MethodCalleeVisitor) ReceiverName() string {
+	return v.receiver
+}
+
+func (v *MethodCalleeVisitor) MethodFuncName() string {
+	return v.name
 }
 
 func (v *MethodCalleeVisitor) AppendPeerCallee(calleeName string) {

@@ -35,6 +35,25 @@ func TestFieldInfoFromSignature(t *testing.T) {
 	assert.True(intf != nil)
 }
 
+func TestLoadDotPackage(t *testing.T) {
+	assert := require.New(t)
+
+	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedSyntax}
+
+	pkgs, err := packages.Load(cfg, ".")
+	assert.NoError(err)
+	assert.Equal(1, len(pkgs))
+
+	fn := FindFuncSignature(pkgs[0], "RenderTypeDeclString")
+	assert.NotNil(fn)
+
+	paramInfos := GetFuncParamInfosFromSignature(fn, "")
+	assert.True(paramInfos != nil)
+
+	returnInfos := GetFuncReturnInfosFromSignature(fn, "")
+	assert.True(returnInfos != nil)
+}
+
 func TestVariadicFieldInfoFromSignature(t *testing.T) {
 	assert := require.New(t)
 

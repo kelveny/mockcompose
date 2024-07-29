@@ -345,20 +345,19 @@ func ReturnInfoListDeclString(returns []*FieldDeclInfo) string {
 }
 
 type ReceiverSpec struct {
-	Name     string
-	TypeDecl string
+	Name     string // receiver variable name
+	TypeDecl string // receiver type declare string
 }
 
-// Get all methods of a "class"
+// Find all methods of a "class"
 //
 // For methods with pointer receivers, prepend "*" to type name when passed in clzName
-func GetClassMethods(clzName string, fset *token.FileSet, f *ast.File) map[string]*ReceiverSpec {
+func FindClassMethods(clzName string, fset *token.FileSet, f *ast.File) map[string]*ReceiverSpec {
 	methods := make(map[string]*ReceiverSpec)
 
 	ForEachFuncDeclInFile(f, func(funcDecl *ast.FuncDecl) {
 		if funcDecl.Recv != nil {
 			recvStr := ParamListDeclString(fset, funcDecl.Recv)
-
 			tokens := strings.Split(recvStr, " ")
 			if len(tokens) == 2 {
 				if tokens[1] == clzName {

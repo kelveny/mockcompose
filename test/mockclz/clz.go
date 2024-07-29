@@ -68,6 +68,10 @@ func (sc *sourceClz) CollapsedReturns() (x, y int, z string) {
 func (sc *sourceClz) VoidReturn() {
 }
 
+func (sc *sourceClz) CallPeer() {
+	sc.Variadic("dummy")
+}
+
 func toJson(o interface{}) string {
 	b, err := json.Marshal(o)
 	if err != nil {

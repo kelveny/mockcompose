@@ -10,7 +10,10 @@ import (
 	"io"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/kelveny/mockcompose/pkg/gogen"
+	"github.com/kelveny/mockcompose/pkg/gosyntax"
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
 
@@ -34,8 +37,7 @@ type classMethodGenerator struct {
 // use compiler to enforce interface compliance
 var _ parsedFileGenerator = (*classMethodGenerator)(nil)
 
-// match checks if a FuncDecl matches condition, if it is matched,
-// change and prepare receiver type to the mocking target class
+// match checks if a FuncDecl matches condition
 func (g *classMethodGenerator) match(fnSpec *ast.FuncDecl) (bool, matchType) {
 	if fnSpec.Recv != nil {
 		t := fnSpec.Recv.List[0].Type
@@ -44,7 +46,6 @@ func (g *classMethodGenerator) match(fnSpec *ast.FuncDecl) (bool, matchType) {
 			recvrClzName := expr.X.(*ast.Ident).Name
 			if g.clzName == recvrClzName {
 				if matchType := g.matchMethod(fnSpec.Name.Name); matchType != MATCH_NONE {
-					expr.X.(*ast.Ident).Name = g.mockName
 					return true, matchType
 				}
 			}
@@ -52,7 +53,6 @@ func (g *classMethodGenerator) match(fnSpec *ast.FuncDecl) (bool, matchType) {
 			recvrClzName := t.(*ast.Ident).Name
 			if g.clzName == recvrClzName {
 				if matchType := g.matchMethod(fnSpec.Name.Name); matchType != MATCH_NONE {
-					t.(*ast.Ident).Name = g.mockName
 					return true, matchType
 				}
 			}
@@ -60,6 +60,26 @@ func (g *classMethodGenerator) match(fnSpec *ast.FuncDecl) (bool, matchType) {
 	}
 
 	return false, MATCH_NONE
+}
+
+func getReceiverTypeName(fnSpec *ast.FuncDecl) string {
+	t := fnSpec.Recv.List[0].Type
+
+	if expr, ok := t.(*ast.StarExpr); ok {
+		return expr.X.(*ast.Ident).Name
+	} else {
+		return t.(*ast.Ident).Name
+	}
+}
+
+func changeReceiverTypeName(fnSpec *ast.FuncDecl, name string) {
+	t := fnSpec.Recv.List[0].Type
+
+	if expr, ok := t.(*ast.StarExpr); ok {
+		expr.X.(*ast.Ident).Name = name
+	} else {
+		t.(*ast.Ident).Name = name
+	}
 }
 
 func (g *classMethodGenerator) matchMethod(fnName string) matchType {
@@ -84,9 +104,12 @@ func (g *classMethodGenerator) matchMethod(fnName string) matchType {
 	return MATCH_NONE
 }
 
-func (g *classMethodGenerator) getMethodOverrides(fnName string) map[string]string {
+func (g *classMethodGenerator) getMethodOverrides(
+	fnName string,
+	calleeVisitor *gosyntax.MethodCalleeVisitor,
+) map[string]string {
 	for _, name := range g.methodsToClone {
-		// in format of methodName,pkg1=mockPkg1:pkg2=mockPkg2
+		// in format of methodName,(pkg1[]=mockPkg1]:pkg2[=mockPkg2],
 		tokens := strings.Split(name, ",")
 		if tokens[0] == fnName {
 			if len(tokens) > 1 {
@@ -96,9 +119,33 @@ func (g *classMethodGenerator) getMethodOverrides(fnName string) map[string]stri
 				for _, pair := range pairs {
 					kv := strings.Split(pair, "=")
 					if len(kv) == 2 {
-						overrides[kv[0]] = kv[1]
+						if kv[0] != "." && kv[0] != "this" {
+							overrides[kv[0]] = kv[1]
+						} else {
+							logger.Log(logger.ERROR, "invalid package override usage: %s", pair)
+						}
 					} else {
-						logger.Log(logger.ERROR, "invalid configuration: -real %s\n", name)
+						switch kv[0] {
+						case ".":
+							// override all callee functions within the same package
+							for _, calleeFn := range calleeVisitor.GetThisPackageCallees() {
+								overrides[calleeFn] = fmt.Sprintf(
+									"%s.%s.%s",
+									calleeVisitor.ReceiverName(),
+									g.getMockedPackageClzName(kv[0], fnName),
+									calleeFn,
+								)
+							}
+						case "this":
+							// for peer method callee, we don't need extra override
+						default:
+							// other package callees, override with a mocked package class
+							overrides[kv[0]] = fmt.Sprintf(
+								"%s.%s",
+								calleeVisitor.ReceiverName(),
+								g.getMockedPackageClzName(kv[0], fnName),
+							)
+						}
 					}
 				}
 				return overrides
@@ -106,6 +153,33 @@ func (g *classMethodGenerator) getMethodOverrides(fnName string) map[string]stri
 		}
 	}
 	return nil
+}
+
+func (g *classMethodGenerator) getMethodAutoMockCalleeConfig(
+	fnName string,
+) (autoMockPeers bool, autoMockPkgs []string) {
+	for _, name := range g.methodsToClone {
+		// in format of methodName,(pkg1[]=mockPkg1]:pkg2[=mockPkg2],
+		tokens := strings.Split(name, ",")
+		if tokens[0] == fnName {
+			if len(tokens) > 1 {
+				pairs := strings.Split(tokens[1], ":")
+
+				for _, pair := range pairs {
+					kv := strings.Split(pair, "=")
+					if len(kv) == 1 {
+						switch kv[0] {
+						case "this":
+							autoMockPeers = true
+						default:
+							autoMockPkgs = append(autoMockPkgs, kv[0])
+						}
+					}
+				}
+			}
+		}
+	}
+	return
 }
 
 func (g *classMethodGenerator) composeMock(
@@ -133,7 +207,7 @@ func (g *classMethodGenerator) generate(
 	var buf bytes.Buffer
 
 	fset := token.NewFileSet()
-	if g.generateInternal(&buf, fset, file) {
+	if ok, _ := g.generateInternal(&buf, fset, file); ok {
 		// reload generated content to process generated code the second time
 		f, err := parser.ParseFile(fset, "", buf.Bytes(), parser.ParseComments)
 		if err != nil {
@@ -166,9 +240,7 @@ func (g *classMethodGenerator) generateInternal(
 	writer io.Writer,
 	fset *token.FileSet,
 	file *ast.File,
-) bool {
-	found := false
-
+) (generated bool, autoMockPkgs []string) {
 	writer.Write([]byte(fmt.Sprintf("package %s\n\n", g.mockPkgName)))
 
 	if len(file.Decls) > 0 {
@@ -176,12 +248,22 @@ func (g *classMethodGenerator) generateInternal(
 			if fnSpec, ok := d.(*ast.FuncDecl); ok {
 				matched, matchType := g.match(fnSpec)
 				if matched {
-					found = true
+					generated = true
 				}
 
 				if matchType == MATCH_CLONE {
 					// clone receiver-modified method
-					overrides := g.getMethodOverrides(fnSpec.Name.Name)
+
+					// find out callee situation
+					receiverSpec := gosyntax.FuncDeclReceiverSpec(fset, fnSpec)
+					clzMethods := gosyntax.FindClassMethods(receiverSpec.TypeDecl, fset, file)
+					v := gosyntax.NewMethodCalleeVisitor(clzMethods, receiverSpec.Name, fnSpec.Name.Name)
+					ast.Walk(v, fnSpec.Body)
+
+					overrides := g.getMethodOverrides(fnSpec.Name.Name, v)
+
+					n := getReceiverTypeName(fnSpec)
+					changeReceiverTypeName(fnSpec, g.mockName)
 					gogen.WriteFuncWithLocalOverrides(
 						writer,
 						fset,
@@ -189,6 +271,20 @@ func (g *classMethodGenerator) generateInternal(
 						fnSpec.Name.Name,
 						overrides,
 					)
+					changeReceiverTypeName(fnSpec, n)
+
+					autoMockPeer, pkgs := g.getMethodAutoMockCalleeConfig(fnSpec.Name.Name)
+					if autoMockPeer {
+						g.generateMethodPeerCallees(writer, fset, file, fnSpec, v)
+					}
+
+					if len(pkgs) > 0 {
+						pkgs := g.generateMethodFuncCallees(writer, fset, file, fnSpec, v)
+						if len(pkgs) > 0 {
+							autoMockPkgs = append(autoMockPkgs, pkgs...)
+						}
+					}
+
 				} else if matchType == MATCH_MOCK {
 					// generate mocked method
 					g.composeMock(writer, fset, fnSpec)
@@ -203,5 +299,53 @@ func (g *classMethodGenerator) generateInternal(
 		}
 	}
 
-	return found
+	return
+}
+
+func (g *classMethodGenerator) generateMethodPeerCallees(
+	writer io.Writer,
+	fset *token.FileSet,
+	file *ast.File,
+	callerFnSpec *ast.FuncDecl,
+	calleeVisitor *gosyntax.MethodCalleeVisitor,
+) {
+	if len(calleeVisitor.GetPeerCallees()) > 0 {
+		for _, peerMethod := range calleeVisitor.GetPeerCallees() {
+
+			// if peer method is not in explicitly specified mocking configuration,
+			// generate it automatically
+			if !slices.Contains(g.methodsToMock, peerMethod) {
+
+				gosyntax.ForEachFuncDeclInFile(file, func(fnSpec *ast.FuncDecl) {
+					if fnSpec.Name.Name == peerMethod &&
+						gosyntax.ReceiverDeclString(fset, callerFnSpec.Recv) == gosyntax.ReceiverDeclString(fset, fnSpec.Recv) {
+						g.composeMock(writer, fset, fnSpec)
+					}
+				})
+			}
+		}
+	}
+}
+
+func (g *classMethodGenerator) generateMethodFuncCallees(
+	writer io.Writer,
+	fset *token.FileSet,
+	file *ast.File,
+	callerFnSpec *ast.FuncDecl,
+	calleeVisitor *gosyntax.MethodCalleeVisitor,
+) []string {
+	// ???
+	return nil
+}
+
+func (g *classMethodGenerator) getMockedPackageClzName(
+	pkgNameToMock string,
+	funcName string,
+) string {
+	// scope mocked package class name at per-method per-package basis
+	if pkgNameToMock != "." {
+		return fmt.Sprintf("mock_%s_%s_%s", g.mockName, funcName, pkgNameToMock)
+	}
+
+	return fmt.Sprintf("mock_%s_%s_funcs", g.mockName, funcName)
 }
