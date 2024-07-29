@@ -12,9 +12,11 @@ const (
 // THIS FILE SHOULD NOT BE EDITED BY HAND
 package %s
 `
-	compositeClzTemplate = `type %s struct {
+	compositeClzTemplateBegin = `type %s struct {
 	%s
 	%s
+`
+	compositeClzTemplateEnd = `
 }
 
 `

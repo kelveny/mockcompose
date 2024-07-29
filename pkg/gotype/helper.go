@@ -9,51 +9,75 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+//	 Quick reference to GO type objects that are used in this package
 //
-//  Quick reference to GO type objects that are used in this package
+//		Package {
+//			Name() string
+//			Path() string
+//			Imports() []*Package
+//			Scope() *Scope
+//				elems (string -> types.Object)
+//	 }
 //
-//	Package {
-//		Name() string
-//		Path() string
-//		Imports() []*Package
-//		Scope() *Scope
-//			elems (string -> types.Object)
-//  }
+//	 types.Object (interface) {
+//			Pkg() *Package  // package to which this object belongs; nil for labels and objects in the Universe scope
+//			Name() string   // package local object name
+//			Type() Type     // object type
+//			Exported() bool // reports whether the name starts with a capital letter
+//			Id() string     // object name if exported, qualified name if not exported (see func Id)
+//			String() string
+//	 }
+//			PkgName
+//			TypeName
+//			Const
+//			Var
+//			Func
+//			Label
+//			Builtin
+//			Nil
 //
-//  types.Object (interface) {
-//		Pkg() *Package  // package to which this object belongs; nil for labels and objects in the Universe scope
-//		Name() string   // package local object name
-//		Type() Type     // object type
-//		Exported() bool // reports whether the name starts with a capital letter
-//		Id() string     // object name if exported, qualified name if not exported (see func Id)
-//		String() string
-//  }
-//		PkgName
-//		TypeName
-//		Const
-//		Var
-//		Func
-//		Label
-//		Builtin
-//		Nil
+//		types.Type (interface) {
+//			Underlying() Type
+//			String() string
+//	 }
 //
-//	types.Type (interface) {
-//		Underlying() Type
-//		String() string
-//  }
-//
-//		Basic
-//		Slice
-//		Array
-//		Struct
-//		Interface
-//		Map
-//		Chan
-//		Pointer
-//		Signature (A Signature represents a (non-builtin) function or method type)
-//		Tuple
-//		Named
-//
+//			Basic
+//			Slice
+//			Array
+//			Struct
+//			Interface
+//			Map
+//			Chan
+//			Pointer
+//			Signature (A Signature represents a (non-builtin) function or method type)
+//			Tuple
+//			Named
+type FuncTypeSpec struct {
+	Signature  *types.Signature
+	FieldInfo  []*gosyntax.FieldDeclInfo
+	ReturnInfo []*gosyntax.FieldDeclInfo
+}
+
+func GetFuncTypeSpec(pkgName, funcName string, mockPkgName string) (*FuncTypeSpec, error) {
+	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedSyntax}
+
+	pkgs, err := packages.Load(cfg, pkgName)
+	if err != nil {
+		return nil, err
+	}
+
+	sig := FindFuncSignature(pkgs[0], funcName)
+	if sig != nil {
+		return &FuncTypeSpec{
+			Signature:  sig,
+			FieldInfo:  GetFuncParamInfosFromSignature(sig, mockPkgName),
+			ReturnInfo: GetFuncReturnInfosFromSignature(sig, mockPkgName),
+		}, nil
+	}
+
+	return nil, fmt.Errorf("function %s not found in %s", funcName, pkgName)
+}
+
 func FindFuncSignature(p *packages.Package, fnName string) *types.Signature {
 	if p != nil && p.Types != nil {
 		ret := p.Types.Scope().Lookup(fnName)

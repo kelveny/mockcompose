@@ -3,6 +3,7 @@ package mockclz
 import (
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,4 +43,24 @@ func TestClonedClz(t *testing.T) {
 	assert.True(x == 1)
 	assert.True(y == 2)
 	assert.True(s == "")
+}
+
+func TestClonedClzWithAutoFuncMock(t *testing.T) {
+	a := cloneWithAutoMock{}
+
+	a.mock_cloneWithAutoMock_CallPeer_fmt.On("Printf", mock.Anything).Return(0, nil)
+	a.mock_cloneWithAutoMock_CallPeer_fmt.On("Sprintf", mock.Anything, mock.Anything).Return("")
+	a.mock_cloneWithAutoMock_CallPeer_mockclz.On("dummy").Return()
+	a.mock_cloneWithAutoMock_CallPeer_mockclz.On("toJson", mock.Anything).Return("")
+	a.On("Variadic", mock.Anything, mock.Anything).Return("Variadic is called")
+	a.On("Variadic4", mock.Anything, mock.Anything).Return("Variadic4 is called")
+
+	a.CallPeer()
+
+	a.AssertNumberOfCalls(t, "Variadic", 1)
+	a.AssertNumberOfCalls(t, "Variadic4", 1)
+	a.mock_cloneWithAutoMock_CallPeer_fmt.AssertNumberOfCalls(t, "Printf", 1)
+	a.mock_cloneWithAutoMock_CallPeer_fmt.AssertNumberOfCalls(t, "Sprintf", 1)
+	a.mock_cloneWithAutoMock_CallPeer_mockclz.AssertNumberOfCalls(t, "dummy", 1)
+	a.mock_cloneWithAutoMock_CallPeer_mockclz.AssertNumberOfCalls(t, "toJson", 1)
 }

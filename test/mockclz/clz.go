@@ -70,6 +70,12 @@ func (sc *sourceClz) VoidReturn() {
 
 func (sc *sourceClz) CallPeer() {
 	sc.Variadic("dummy")
+
+	// ordinary functions
+	toJson(fmt.Sprintf("dummy %s", sc.Variadic4()))
+	dummy()
+
+	fmt.Printf("dummy")
 }
 
 func toJson(o interface{}) string {
@@ -78,4 +84,7 @@ func toJson(o interface{}) string {
 		return err.Error()
 	}
 	return string(b)
+}
+
+func dummy() {
 }

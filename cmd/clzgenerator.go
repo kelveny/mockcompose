@@ -14,6 +14,7 @@ import (
 
 	"github.com/kelveny/mockcompose/pkg/gogen"
 	"github.com/kelveny/mockcompose/pkg/gosyntax"
+	"github.com/kelveny/mockcompose/pkg/gotype"
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
 
@@ -105,6 +106,7 @@ func (g *classMethodGenerator) matchMethod(fnName string) matchType {
 }
 
 func (g *classMethodGenerator) getMethodOverrides(
+	callerPkg string,
 	fnName string,
 	calleeVisitor *gosyntax.MethodCalleeVisitor,
 ) map[string]string {
@@ -132,7 +134,7 @@ func (g *classMethodGenerator) getMethodOverrides(
 								overrides[calleeFn] = fmt.Sprintf(
 									"%s.%s.%s",
 									calleeVisitor.ReceiverName(),
-									g.getMockedPackageClzName(kv[0], fnName),
+									g.getMockedPackageClzName(callerPkg, kv[0], fnName),
 									calleeFn,
 								)
 							}
@@ -141,9 +143,9 @@ func (g *classMethodGenerator) getMethodOverrides(
 						default:
 							// other package callees, override with a mocked package class
 							overrides[kv[0]] = fmt.Sprintf(
-								"%s.%s",
+								"&%s.%s",
 								calleeVisitor.ReceiverName(),
-								g.getMockedPackageClzName(kv[0], fnName),
+								g.getMockedPackageClzName(callerPkg, kv[0], fnName),
 							)
 						}
 					}
@@ -207,7 +209,7 @@ func (g *classMethodGenerator) generate(
 	var buf bytes.Buffer
 
 	fset := token.NewFileSet()
-	if ok, _ := g.generateInternal(&buf, fset, file); ok {
+	if ok, autoMockPkgs := g.generateInternal(&buf, fset, file); ok {
 		// reload generated content to process generated code the second time
 		f, err := parser.ParseFile(fset, "", buf.Bytes(), parser.ParseComments)
 		if err != nil {
@@ -228,7 +230,15 @@ func (g *classMethodGenerator) generate(
 		fmt.Fprintf(writer, header, g.mockPkgName)
 
 		gogen.WriteImportDecls(writer, cleanedImports)
-		fmt.Fprintf(writer, compositeClzTemplate, g.mockName, g.clzName, "mock.Mock")
+		fmt.Fprintf(writer, compositeClzTemplateBegin, g.mockName, g.clzName, "mock.Mock")
+		for _, mockedPkgClz := range autoMockPkgs {
+			fmt.Fprintf(writer, "	%s\n", mockedPkgClz)
+		}
+		fmt.Fprint(writer, compositeClzTemplateEnd)
+
+		for _, mockedPkgClz := range autoMockPkgs {
+			fmt.Fprintf(writer, mockClzTemplate, mockedPkgClz, "mock.Mock")
+		}
 
 		gogen.WriteFuncDecls(writer, fset, f)
 	}
@@ -260,7 +270,7 @@ func (g *classMethodGenerator) generateInternal(
 					v := gosyntax.NewMethodCalleeVisitor(clzMethods, receiverSpec.Name, fnSpec.Name.Name)
 					ast.Walk(v, fnSpec.Body)
 
-					overrides := g.getMethodOverrides(fnSpec.Name.Name, v)
+					overrides := g.getMethodOverrides(file.Name.Name, fnSpec.Name.Name, v)
 
 					n := getReceiverTypeName(fnSpec)
 					changeReceiverTypeName(fnSpec, g.mockName)
@@ -279,9 +289,9 @@ func (g *classMethodGenerator) generateInternal(
 					}
 
 					if len(pkgs) > 0 {
-						pkgs := g.generateMethodFuncCallees(writer, fset, file, fnSpec, v)
-						if len(pkgs) > 0 {
-							autoMockPkgs = append(autoMockPkgs, pkgs...)
+						mockedPkgs := g.generateMethodFuncCallees(writer, fset, file, fnSpec, v, pkgs)
+						if len(mockedPkgs) > 0 {
+							autoMockPkgs = append(autoMockPkgs, mockedPkgs...)
 						}
 					}
 
@@ -315,7 +325,6 @@ func (g *classMethodGenerator) generateMethodPeerCallees(
 			// if peer method is not in explicitly specified mocking configuration,
 			// generate it automatically
 			if !slices.Contains(g.methodsToMock, peerMethod) {
-
 				gosyntax.ForEachFuncDeclInFile(file, func(fnSpec *ast.FuncDecl) {
 					if fnSpec.Name.Name == peerMethod &&
 						gosyntax.ReceiverDeclString(fset, callerFnSpec.Recv) == gosyntax.ReceiverDeclString(fset, fnSpec.Recv) {
@@ -329,16 +338,46 @@ func (g *classMethodGenerator) generateMethodPeerCallees(
 
 func (g *classMethodGenerator) generateMethodFuncCallees(
 	writer io.Writer,
-	fset *token.FileSet,
+	_ *token.FileSet,
 	file *ast.File,
 	callerFnSpec *ast.FuncDecl,
 	calleeVisitor *gosyntax.MethodCalleeVisitor,
+	pkgs []string,
 ) []string {
-	// ???
-	return nil
+	mockedPkgs := []string{}
+
+	for _, pkg := range pkgs {
+		mockedPkg := g.getMockedPackageClzName(file.Name.Name, pkg, callerFnSpec.Name.Name)
+
+		var callees []string
+		if pkg == "." {
+			callees = calleeVisitor.GetThisPackageCallees()
+		} else {
+			callees = calleeVisitor.GetOtherPackageCallees()[pkg]
+		}
+
+		for _, callee := range callees {
+			calleeSpec, err := gotype.GetFuncTypeSpec(pkg, callee, g.mockPkgName)
+			if err == nil {
+				gogen.GenerateFuncMock(
+					writer,
+					g.mockPkgName,
+					mockedPkg,
+					callee,
+					calleeSpec.FieldInfo,
+					calleeSpec.ReturnInfo,
+					calleeSpec.Signature,
+				)
+			}
+		}
+
+		mockedPkgs = append(mockedPkgs, mockedPkg)
+	}
+	return mockedPkgs
 }
 
 func (g *classMethodGenerator) getMockedPackageClzName(
+	callerPkg string,
 	pkgNameToMock string,
 	funcName string,
 ) string {
@@ -347,5 +386,5 @@ func (g *classMethodGenerator) getMockedPackageClzName(
 		return fmt.Sprintf("mock_%s_%s_%s", g.mockName, funcName, pkgNameToMock)
 	}
 
-	return fmt.Sprintf("mock_%s_%s_funcs", g.mockName, funcName)
+	return fmt.Sprintf("mock_%s_%s_%s", g.mockName, funcName, callerPkg)
 }
