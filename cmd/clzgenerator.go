@@ -283,12 +283,15 @@ func (g *classMethodGenerator) generateInternal(
 					)
 					changeReceiverTypeName(fnSpec, n)
 
+					// pkgs will be in order of how it is defined in "-real,<pkg1>:<pkg2>""
 					autoMockPeer, pkgs := g.getMethodAutoMockCalleeConfig(fnSpec.Name.Name)
 					if autoMockPeer {
+						// peer callee in order of how it is declared in file
 						g.generateMethodPeerCallees(writer, fset, file, fnSpec, v)
 					}
 
 					if len(pkgs) > 0 {
+						// package will be mocked as a struct type, mockedPkgs contains the names of these mocked structs
 						mockedPkgs := g.generateMethodFuncCallees(writer, fset, file, fnSpec, v, pkgs)
 						if len(mockedPkgs) > 0 {
 							autoMockPkgs = append(autoMockPkgs, mockedPkgs...)

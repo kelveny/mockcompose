@@ -19,6 +19,9 @@ func (f *foo) Foo() string {
 		return "Overriden with Bar"
 	}
 
+	dummy()
+	fmt.Print("Foo")
+
 	return f.name
 }
 
