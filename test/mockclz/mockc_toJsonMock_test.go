@@ -21,13 +21,21 @@ type mock_toJsonMock_toJson_json struct {
 }
 
 func (m *toJsonMock) toJson(o interface{}) string {
+	dummy := m.mock_toJsonMock_toJson_mockclz.dummy
 	json := &m.mock_toJsonMock_toJson_json
 
 	b, err := json.Marshal(o)
 	if err != nil {
 		return err.Error()
 	}
+	dummy()
 	return string(b)
+}
+
+func (m *mock_toJsonMock_toJson_mockclz) dummy() {
+
+	m.Called()
+
 }
 
 func (m *mock_toJsonMock_toJson_json) Marshal(v interface{}) ([]byte, error) {

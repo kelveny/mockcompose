@@ -112,7 +112,7 @@ func (f *foo) Bar() bool {
 package foo
 ```
 
-`mockcompose` generated code: mockc_testFoo_test.go
+`mockcompose` generated code for method function: (directed by `//go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt`)
 
 ```go
 type testFoo struct {
@@ -194,7 +194,60 @@ func (m *mock_testFoo_Foo_fmt) Print(a ...interface{}) (n int, err error) {
 
 ```
 
-You can now write unit tests to test at fine-grained granularity.
+`mockcompose` generated code for a mocked implementation of interface Foo: (directed by `//go:generate mockcompose -n FooMock -i Foo`)
+
+```go
+// CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
+// THIS FILE SHOULD NOT BE EDITED BY HAND
+package foo
+
+import (
+    "github.com/stretchr/testify/mock"
+)
+
+type FooMock struct {
+    mock.Mock
+}
+
+func (m *FooMock) Foo() string {
+
+    _mc_ret := m.Called()
+
+    var _r0 string
+
+    if _rfn, ok := _mc_ret.Get(0).(func() string); ok {
+        _r0 = _rfn()
+    } else {
+        if _mc_ret.Get(0) != nil {
+            _r0 = _mc_ret.Get(0).(string)
+        }
+    }
+
+    return _r0
+
+}
+
+func (m *FooMock) Bar() bool {
+
+    _mc_ret := m.Called()
+
+    var _r0 bool
+
+    if _rfn, ok := _mc_ret.Get(0).(func() bool); ok {
+        _r0 = _rfn()
+    } else {
+        if _mc_ret.Get(0) != nil {
+            _r0 = _mc_ret.Get(0).(bool)
+        }
+    }
+
+    return _r0
+
+}
+
+```
+
+You can now write unit tests to test at fine-grained granularity:
 
 ```go
 func TestFoo(t *testing.T) {
@@ -223,6 +276,103 @@ func TestFoo(t *testing.T) {
     fooObj.mock_testFoo_Foo_foo.AssertNumberOfCalls(t, "dummy", 1)
     fooObj.mock_testFoo_Foo_fmt.AssertNumberOfCalls(t, "Print", 1)
 }
+```
+
+You can also apply the same approach to ordinary function:
+
+```go
+//go:generate mockcompose -n mockCallee -real functionThatUsesFunctionFromSameRoot,foo
+func functionThatUsesFunctionFromSameRoot() string {
+
+    if useRemoteDummy() {
+        s := foo.Dummy()
+        fmt.Printf("result from remote: %s\n", s)
+        return s
+    } else {
+        s := dummy()
+
+        fmt.Printf("result from local: %s\n", s)
+        return s
+    }
+}
+
+func useRemoteDummy() bool {
+    return true
+}
+
+func dummy() string {
+    return "dummy"
+}
+```
+
+`mockcompose` will then generate code as:
+
+```go
+// CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
+// THIS FILE SHOULD NOT BE EDITED BY HAND
+package clonefn
+
+import (
+    "fmt"
+
+    "github.com/stretchr/testify/mock"
+)
+
+type mockCallee struct {
+    mock.Mock
+    mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo
+}
+
+type mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo struct {
+    mock.Mock
+}
+
+func (m *mockCallee) functionThatUsesFunctionFromSameRoot() string {
+    foo := &m.mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo
+
+    if useRemoteDummy() {
+        s := foo.Dummy()
+        fmt.Printf("result from remote: %s\n", s)
+        return s
+    } else {
+        s := dummy()
+        fmt.Printf("result from local: %s\n", s)
+        return s
+    }
+}
+
+func (m *mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo) Dummy() string {
+
+    _mc_ret := m.Called()
+
+    var _r0 string
+
+    if _rfn, ok := _mc_ret.Get(0).(func() string); ok {
+        _r0 = _rfn()
+    } else {
+        if _mc_ret.Get(0) != nil {
+            _r0 = _mc_ret.Get(0).(string)
+        }
+    }
+
+    return _r0
+
+}
+
+```
+
+To test `functionThatUsesFunctionFromSameRoot` with mocked callees:
+
+```go
+func Test_functionThatUsesFunctionFromSameRoot(t *testing.T) {
+    assert := require.New(t)
+
+    c := &mockCallee{}
+    c.mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo.On("Dummy").Return("Mocked Dummy")
+    s := c.functionThatUsesFunctionFromSameRoot()
+    assert.Equal("Mocked Dummy", s)
+}
+
 ```
 
 ## FAQ

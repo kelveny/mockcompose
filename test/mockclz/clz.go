@@ -83,6 +83,7 @@ func toJson(o interface{}) string {
 	if err != nil {
 		return err.Error()
 	}
+	dummy()
 	return string(b)
 }
 

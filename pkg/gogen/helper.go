@@ -143,51 +143,46 @@ func WriteFuncWithLocalOverrides(
 	fnName string,
 	overrides map[string]string,
 ) {
-	if len(overrides) == 0 {
-		format.Node(writer, fset, fnSpec)
-		writer.Write([]byte("\n\n"))
+	if fnSpec.Recv != nil {
+		fmt.Fprintf(
+			writer,
+			"func (%s) %s",
+			gosyntax.ParamListDeclString(fset, fnSpec.Recv),
+			fnName,
+		)
 	} else {
-		if fnSpec.Recv != nil {
+		if receiverDecl != "" {
 			fmt.Fprintf(
 				writer,
-				"func (%s) %s",
-				gosyntax.ParamListDeclString(fset, fnSpec.Recv),
+				"func %s %s",
+				receiverDecl,
 				fnName,
 			)
 		} else {
-			if receiverDecl != "" {
-				fmt.Fprintf(
-					writer,
-					"func %s %s",
-					receiverDecl,
-					fnName,
-				)
-			} else {
-				fmt.Fprintf(
-					writer,
-					"func %s",
-					fnName,
-				)
-			}
+			fmt.Fprintf(
+				writer,
+				"func %s",
+				fnName,
+			)
 		}
-
-		var b bytes.Buffer
-		// fnSpec.Type -> func(params) (rets)
-		format.Node(&b, fset, fnSpec.Type)
-
-		// use everything after func
-		fmt.Fprint(writer, string(b.Bytes()[4:]))
-
-		b.Reset()
-		format.Node(&b, fset, fnSpec.Body)
-		end := len(b.Bytes()) - 1
-		body := string(b.Bytes()[1:end])
-
-		fmt.Fprint(writer, " {")
-		generateLocalOverrides(writer, overrides)
-		fmt.Fprint(writer, body)
-		fmt.Fprintln(writer, "}")
 	}
+
+	var b bytes.Buffer
+	// fnSpec.Type -> func(params) (rets)
+	format.Node(&b, fset, fnSpec.Type)
+
+	// use everything after func
+	fmt.Fprint(writer, string(b.Bytes()[4:]))
+
+	b.Reset()
+	format.Node(&b, fset, fnSpec.Body)
+	end := len(b.Bytes()) - 1
+	body := string(b.Bytes()[1:end])
+
+	fmt.Fprint(writer, " {")
+	generateLocalOverrides(writer, overrides)
+	fmt.Fprint(writer, body)
+	fmt.Fprintln(writer, "}")
 }
 
 func generateLocalOverrides(writer io.Writer, overrides map[string]string) {
