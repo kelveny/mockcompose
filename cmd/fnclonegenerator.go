@@ -125,6 +125,7 @@ func (g *functionCloneGenerator) generateInternal(
 						writer,
 						fset,
 						fnSpec,
+						"",
 						fnSpec.Name.Name+"_clone",
 						overrides,
 					)

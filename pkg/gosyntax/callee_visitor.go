@@ -2,6 +2,9 @@ package gosyntax
 
 import (
 	"go/ast"
+	"go/types"
+
+	"golang.org/x/tools/go/packages"
 )
 
 type CalleeVisitor struct {
@@ -125,4 +128,60 @@ func (v *CalleeVisitor) Visit(node ast.Node) ast.Visitor {
 		}
 	}
 	return v
+}
+
+func (v *CalleeVisitor) SanitizeCallees(
+	imports map[string]string,
+) {
+	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedSyntax}
+
+	if len(v.thisPkgCallees) > 0 {
+		filteredCallees := []string{}
+
+		pkgs, _ := packages.Load(cfg, ".")
+		for _, callee := range v.thisPkgCallees {
+			if findFuncSignature(pkgs[0], callee) != nil {
+				filteredCallees = append(filteredCallees, callee)
+			}
+		}
+		v.thisPkgCallees = filteredCallees
+	}
+
+	if len(v.otherPkgcallees) > 0 {
+		for pkgName, callees := range v.otherPkgcallees {
+			if _, ok := imports[pkgName]; ok {
+				pkgs, err := packages.Load(cfg, imports[pkgName])
+				if err == nil {
+					filteredCallees := []string{}
+
+					for _, callee := range callees {
+						if findFuncSignature(pkgs[0], callee) != nil {
+							filteredCallees = append(filteredCallees, callee)
+						}
+					}
+					if len(filteredCallees) > 0 {
+						v.otherPkgcallees[pkgName] = filteredCallees
+					} else {
+						delete(v.otherPkgcallees, pkgName)
+					}
+				} else {
+					delete(v.otherPkgcallees, pkgName)
+				}
+			} else {
+				delete(v.otherPkgcallees, pkgName)
+			}
+		}
+	}
+}
+
+func findFuncSignature(p *packages.Package, fnName string) *types.Signature {
+	if p != nil && p.Types != nil {
+		ret := p.Types.Scope().Lookup(fnName)
+		if ret != nil {
+			if fn, ok := ret.(*types.Func); ok {
+				return fn.Type().(*types.Signature)
+			}
+		}
+	}
+	return nil
 }

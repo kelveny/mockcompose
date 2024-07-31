@@ -139,6 +139,7 @@ func WriteFuncWithLocalOverrides(
 	writer io.Writer,
 	fset *token.FileSet,
 	fnSpec *ast.FuncDecl,
+	receiverDecl string,
 	fnName string,
 	overrides map[string]string,
 ) {
@@ -154,11 +155,20 @@ func WriteFuncWithLocalOverrides(
 				fnName,
 			)
 		} else {
-			fmt.Fprintf(
-				writer,
-				"func %s",
-				fnName,
-			)
+			if receiverDecl != "" {
+				fmt.Fprintf(
+					writer,
+					"func %s %s",
+					receiverDecl,
+					fnName,
+				)
+			} else {
+				fmt.Fprintf(
+					writer,
+					"func %s",
+					fnName,
+				)
+			}
 		}
 
 		var b bytes.Buffer

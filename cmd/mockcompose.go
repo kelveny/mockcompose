@@ -65,7 +65,7 @@ func loadYamlConfig(yamlFile string) *Config {
 func executeOptions(options *CommandOptions) {
 	var g parsedFileGenerator
 
-	if options.ClzName != "" {
+	if options.ClzName != "" || len(options.MethodsToClone) > 0 {
 		if len(options.MethodsToClone) == 0 {
 			logger.Log(logger.ERROR, "Please specify at least one real method name with -real option\n")
 			os.Exit(1)
@@ -102,6 +102,7 @@ func executeOptions(options *CommandOptions) {
 		}
 
 		if len(options.MethodsToClone) > 0 {
+			// pure function clone is now deprecated
 			if options.SrcPkg != "" {
 				logger.Log(logger.PROMPT,
 					"No source package support in function clone generation, ignore source package %s\n",
