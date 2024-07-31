@@ -65,4 +65,10 @@ func (f *dummyFoo) Bar() bool {
 }
 
 func dummy() {
+	fmt.Print("dummy")
+	fool()
+}
+
+func fool() {
+	fmt.Print("fool")
 }

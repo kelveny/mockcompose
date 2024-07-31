@@ -40,21 +40,12 @@ const (
 `
 )
 
-type ImportSpec struct {
-	Name string
-	Path string
-}
-
-func (s *ImportSpec) IsNameDefault() bool {
-	return s.Name == s.Path || strings.HasSuffix(s.Path, "/"+s.Name)
-}
-
-func GetPackageImports(pkg *packages.Package) []ImportSpec {
-	var specs []ImportSpec
+func GetPackageImports(pkg *packages.Package) []gosyntax.ImportSpec {
+	var specs []gosyntax.ImportSpec
 
 	if pkg.Imports != nil {
 		for _, p := range pkg.Imports {
-			specs = append(specs, ImportSpec{
+			specs = append(specs, gosyntax.ImportSpec{
 				Name: p.Name,
 				Path: p.PkgPath,
 			})
@@ -62,7 +53,7 @@ func GetPackageImports(pkg *packages.Package) []ImportSpec {
 	} else {
 		if pkg.Types != nil {
 			for _, p := range pkg.Types.Imports() {
-				specs = append(specs, ImportSpec{
+				specs = append(specs, gosyntax.ImportSpec{
 					Name: p.Name(),
 					Path: p.Path(),
 				})
@@ -73,51 +64,8 @@ func GetPackageImports(pkg *packages.Package) []ImportSpec {
 	return specs
 }
 
-func GetFileImports(file *ast.File) []ImportSpec {
-	var specs []ImportSpec
-
-	for _, s := range file.Imports {
-		n := ""
-		if s.Name != nil {
-			n = s.Name.Name
-		}
-
-		specs = append(specs, ImportSpec{
-			Name: n,
-			Path: strings.Trim(s.Path.Value, "\""),
-		})
-	}
-
-	return specs
-}
-
 func LookupInPackageScope(pkg *packages.Package, name string) types.Object {
 	return pkg.Types.Scope().Lookup(name)
-}
-
-func AppendImportSpec(specs []ImportSpec, name, p string) []ImportSpec {
-	if strings.HasSuffix(p, "/"+name) || name == p {
-		name = ""
-	}
-
-	appearsAsNew := true
-	if len(specs) > 0 {
-		for _, spec := range specs {
-			if spec.Name == name && spec.Path == p {
-				appearsAsNew = false
-				break
-			}
-		}
-	}
-
-	if appearsAsNew {
-		return append(specs, ImportSpec{
-			Name: name,
-			Path: p,
-		})
-	}
-
-	return specs
 }
 
 // SetImportSpecs sets ImportSpecs in f's Decls section using the passed ImportSpecs
@@ -137,7 +85,7 @@ func SetImportSpecs(f *ast.File, imports []*ast.ImportSpec) {
 	}
 }
 
-func CleanImports(f *ast.File, cleanedImports []ImportSpec) []ImportSpec {
+func CleanImports(f *ast.File, cleanedImports []gosyntax.ImportSpec) []gosyntax.ImportSpec {
 	if len(f.Imports) > 0 {
 		for _, imp := range f.Imports {
 			// Path.Value has been quoted, remove it
@@ -147,7 +95,7 @@ func CleanImports(f *ast.File, cleanedImports []ImportSpec) []ImportSpec {
 					name = imp.Name.Name
 				}
 				p = strings.Trim(imp.Path.Value, "\"")
-				cleanedImports = AppendImportSpec(cleanedImports, name, p)
+				cleanedImports = gosyntax.AppendImportSpec(cleanedImports, name, p)
 			}
 		}
 	}
@@ -155,7 +103,7 @@ func CleanImports(f *ast.File, cleanedImports []ImportSpec) []ImportSpec {
 	return cleanedImports
 }
 
-func WriteImportDecls(writer io.Writer, imports []ImportSpec) {
+func WriteImportDecls(writer io.Writer, imports []gosyntax.ImportSpec) {
 	if len(imports) > 0 {
 		fmt.Fprintln(writer, "import (")
 
@@ -330,7 +278,6 @@ func buildReturnFieldBinding(
 // MockFunc generates a mocking method on mockClz class
 // generate mockery (https://github.com/vektra/mockery) compatible mocking implementation
 // from syntax based declarations
-//
 func MockFunc(
 	writer io.Writer,
 	mockPkg string,
@@ -347,10 +294,8 @@ func MockFunc(
 	GenerateFuncMock(writer, mockPkg, mockClz, fnName, paramInfos, returnInfos, signature)
 }
 
-//
 // GenerateFuncMock generates function mock implementation based on FieldDeclInfo
 // abstraction
-//
 func GenerateFuncMock(
 	writer io.Writer,
 	mockPkg string,

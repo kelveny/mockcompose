@@ -58,10 +58,10 @@ type FuncTypeSpec struct {
 	ReturnInfo []*gosyntax.FieldDeclInfo
 }
 
-func GetFuncTypeSpec(pkgName, funcName string, mockPkgName string) (*FuncTypeSpec, error) {
+func GetFuncTypeSpec(pkgPath, funcName string, mockPkgName string) (*FuncTypeSpec, error) {
 	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedSyntax}
 
-	pkgs, err := packages.Load(cfg, pkgName)
+	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func GetFuncTypeSpec(pkgName, funcName string, mockPkgName string) (*FuncTypeSpe
 		}, nil
 	}
 
-	return nil, fmt.Errorf("function %s not found in %s", funcName, pkgName)
+	return nil, fmt.Errorf("function %s not found in %s", funcName, pkgPath)
 }
 
 func FindFuncSignature(p *packages.Package, fnName string) *types.Signature {

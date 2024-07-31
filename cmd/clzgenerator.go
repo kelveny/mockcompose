@@ -108,7 +108,7 @@ func (g *classMethodGenerator) matchMethod(fnName string) matchType {
 func (g *classMethodGenerator) getMethodOverrides(
 	callerPkg string,
 	fnName string,
-	calleeVisitor *gosyntax.MethodCalleeVisitor,
+	calleeVisitor *gosyntax.CalleeVisitor,
 ) map[string]string {
 	for _, name := range g.methodsToClone {
 		// in format of methodName,(pkg1[]=mockPkg1]:pkg2[=mockPkg2],
@@ -218,7 +218,7 @@ func (g *classMethodGenerator) generate(
 		}
 
 		// remove unused imports
-		var cleanedImports []gogen.ImportSpec = []gogen.ImportSpec{
+		var cleanedImports []gosyntax.ImportSpec = []gosyntax.ImportSpec{
 			{
 				Name: "mock",
 				Path: "github.com/stretchr/testify/mock",
@@ -267,7 +267,12 @@ func (g *classMethodGenerator) generateInternal(
 					// find out callee situation
 					receiverSpec := gosyntax.FuncDeclReceiverSpec(fset, fnSpec)
 					clzMethods := gosyntax.FindClassMethods(receiverSpec.TypeDecl, fset, file)
-					v := gosyntax.NewMethodCalleeVisitor(clzMethods, receiverSpec.Name, fnSpec.Name.Name)
+					v := gosyntax.NewCalleeVisitor(
+						gosyntax.GetFileImportsAsMap(file),
+						clzMethods,
+						receiverSpec.Name,
+						fnSpec.Name.Name,
+					)
 					ast.Walk(v, fnSpec.Body)
 
 					overrides := g.getMethodOverrides(file.Name.Name, fnSpec.Name.Name, v)
@@ -320,7 +325,7 @@ func (g *classMethodGenerator) generateMethodPeerCallees(
 	fset *token.FileSet,
 	file *ast.File,
 	callerFnSpec *ast.FuncDecl,
-	calleeVisitor *gosyntax.MethodCalleeVisitor,
+	calleeVisitor *gosyntax.CalleeVisitor,
 ) {
 	if len(calleeVisitor.GetPeerCallees()) > 0 {
 		for _, peerMethod := range calleeVisitor.GetPeerCallees() {
@@ -344,10 +349,12 @@ func (g *classMethodGenerator) generateMethodFuncCallees(
 	_ *token.FileSet,
 	file *ast.File,
 	callerFnSpec *ast.FuncDecl,
-	calleeVisitor *gosyntax.MethodCalleeVisitor,
+	calleeVisitor *gosyntax.CalleeVisitor,
 	pkgs []string,
 ) []string {
 	mockedPkgs := []string{}
+
+	imports := gosyntax.GetFileImportsAsMap(file)
 
 	for _, pkg := range pkgs {
 		mockedPkg := g.getMockedPackageClzName(file.Name.Name, pkg, callerFnSpec.Name.Name)
@@ -360,7 +367,7 @@ func (g *classMethodGenerator) generateMethodFuncCallees(
 		}
 
 		for _, callee := range callees {
-			calleeSpec, err := gotype.GetFuncTypeSpec(pkg, callee, g.mockPkgName)
+			calleeSpec, err := gotype.GetFuncTypeSpec(imports[pkg], callee, g.mockPkgName)
 			if err == nil {
 				gogen.GenerateFuncMock(
 					writer,

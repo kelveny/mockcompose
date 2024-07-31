@@ -66,7 +66,7 @@ func (g *functionMockGenerator) generate(
 		}
 
 		// remove unused imports
-		var cleanedImports []gogen.ImportSpec = []gogen.ImportSpec{
+		var cleanedImports []gosyntax.ImportSpec = []gosyntax.ImportSpec{
 			{
 				Name: "mock",
 				Path: "github.com/stretchr/testify/mock",
@@ -105,7 +105,7 @@ func (g *functionMockGenerator) generateViaLoadedPackage(
 
 				imports := gogen.GetPackageImports(pkg)
 				if g.srcPkg != "" {
-					imports = append(imports, gogen.ImportSpec{
+					imports = append(imports, gosyntax.ImportSpec{
 						Name: "",
 						Path: g.srcPkg,
 					})
@@ -136,7 +136,7 @@ func (g *functionMockGenerator) generateViaLoadedPackage(
 		}
 
 		// remove unused imports
-		var cleanedImports []gogen.ImportSpec = []gogen.ImportSpec{
+		var cleanedImports []gosyntax.ImportSpec = []gosyntax.ImportSpec{
 			{
 				Name: "mock",
 				Path: "github.com/stretchr/testify/mock",

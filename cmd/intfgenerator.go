@@ -35,9 +35,9 @@ func (g *interfaceMockGenerator) generate(
 	gosyntax.ForEachInterfaceDeclInFile(file,
 		func(name string, methods []*ast.Field) {
 			if name == g.intfName {
-				imports := gogen.GetFileImports(file)
+				imports := gosyntax.GetFileImports(file)
 				if g.srcPkg != "" {
-					imports = append(imports, gogen.ImportSpec{
+					imports = append(imports, gosyntax.ImportSpec{
 						Name: "",
 						Path: g.srcPkg,
 					})
@@ -59,7 +59,7 @@ func (g *interfaceMockGenerator) generateViaLoadedPackage(
 			if name == g.intfName {
 				imports := gogen.GetPackageImports(pkg)
 				if g.srcPkg != "" {
-					imports = append(imports, gogen.ImportSpec{
+					imports = append(imports, gosyntax.ImportSpec{
 						Name: "",
 						Path: g.srcPkg,
 					})
@@ -73,7 +73,7 @@ func (g *interfaceMockGenerator) generateViaLoadedPackage(
 
 func (g *interfaceMockGenerator) generateInterfaceMock(
 	writer io.Writer,
-	imports []gogen.ImportSpec,
+	imports []gosyntax.ImportSpec,
 	methods []*ast.Field,
 	pkg *packages.Package,
 	intfName string,
@@ -90,7 +90,7 @@ func (g *interfaceMockGenerator) generateInterfaceMock(
 		}
 
 		// remove unused imports
-		var cleanedImports []gogen.ImportSpec = []gogen.ImportSpec{
+		var cleanedImports []gosyntax.ImportSpec = []gosyntax.ImportSpec{
 			{
 				Name: "mock",
 				Path: "github.com/stretchr/testify/mock",
@@ -113,7 +113,7 @@ func (g *interfaceMockGenerator) generateInterfaceMock(
 func (g *interfaceMockGenerator) generateInterfaceMockInternal(
 	writer io.Writer,
 	fset *token.FileSet,
-	imports []gogen.ImportSpec,
+	imports []gosyntax.ImportSpec,
 	methods []*ast.Field,
 	pkg *packages.Package,
 	intfName string,

@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -68,6 +69,83 @@ import (
 		Comment *CommentGroup // line comments; or nil
 	}
 */
+
+type ImportSpec struct {
+	Name string
+	Path string
+}
+
+func (s *ImportSpec) IsNameDefault() bool {
+	return s.Name == s.Path || strings.HasSuffix(s.Path, "/"+s.Name)
+}
+
+func GetFileImports(file *ast.File) []ImportSpec {
+	var specs []ImportSpec
+
+	for _, s := range file.Imports {
+		n := ""
+		if s.Name != nil {
+			n = s.Name.Name
+		}
+
+		specs = append(specs, ImportSpec{
+			Name: n,
+			Path: strings.Trim(s.Path.Value, "\""),
+		})
+	}
+
+	return specs
+}
+
+// import name -> path map
+func GetFileImportsAsMap(file *ast.File) map[string]string {
+	specs := map[string]string{}
+
+	for _, s := range file.Imports {
+		n := ""
+		if s.Name != nil {
+			n = s.Name.Name
+		}
+
+		path := strings.Trim(s.Path.Value, "\"")
+
+		if n == "" {
+			n = filepath.Base(path)
+		}
+
+		specs[n] = path
+	}
+
+	// always add "." package
+	specs["."] = "."
+
+	return specs
+}
+
+func AppendImportSpec(specs []ImportSpec, name, p string) []ImportSpec {
+	if strings.HasSuffix(p, "/"+name) || name == p {
+		name = ""
+	}
+
+	appearsAsNew := true
+	if len(specs) > 0 {
+		for _, spec := range specs {
+			if spec.Name == name && spec.Path == p {
+				appearsAsNew = false
+				break
+			}
+		}
+	}
+
+	if appearsAsNew {
+		return append(specs, ImportSpec{
+			Name: name,
+			Path: p,
+		})
+	}
+
+	return specs
+}
 
 // ForEachDeclInPackage iterates all AST Decl objects in a AST syntactic package
 func ForEachDeclInPackage(

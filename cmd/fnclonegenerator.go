@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/kelveny/mockcompose/pkg/gogen"
+	"github.com/kelveny/mockcompose/pkg/gosyntax"
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
 
@@ -88,7 +89,7 @@ func (g *functionCloneGenerator) generate(
 		}
 
 		// remove unused imports
-		var cleanedImports []gogen.ImportSpec = []gogen.ImportSpec{}
+		var cleanedImports []gosyntax.ImportSpec = []gosyntax.ImportSpec{}
 		cleanedImports = gogen.CleanImports(f, cleanedImports)
 
 		// compose final output
