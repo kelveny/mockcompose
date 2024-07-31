@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/types"
 
+	"golang.org/x/exp/slices"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -58,7 +59,9 @@ func (v *CalleeVisitor) GetPeerCallees() []string {
 }
 
 func (v *CalleeVisitor) AppendThisPackageCallee(calleeName string) {
-	v.thisPkgCallees = append(v.thisPkgCallees, calleeName)
+	if !slices.Contains(v.thisPkgCallees, calleeName) {
+		v.thisPkgCallees = append(v.thisPkgCallees, calleeName)
+	}
 }
 
 func (v *CalleeVisitor) GetThisPackageCallees() []string {
@@ -71,7 +74,9 @@ func (v *CalleeVisitor) AppendOtherPackageCallee(pkgName, calleeName string) {
 			v.otherPkgcallees = make(map[string][]string)
 		}
 
-		v.otherPkgcallees[pkgName] = append(v.otherPkgcallees[pkgName], calleeName)
+		if !slices.Contains(v.otherPkgcallees[pkgName], calleeName) {
+			v.otherPkgcallees[pkgName] = append(v.otherPkgcallees[pkgName], calleeName)
+		}
 	}
 }
 

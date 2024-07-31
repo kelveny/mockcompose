@@ -72,3 +72,7 @@ func dummy() {
 func fool() {
 	fmt.Print("fool")
 }
+
+func Dummy() string {
+	return "Dummy"
+}

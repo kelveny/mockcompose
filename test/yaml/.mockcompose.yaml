@@ -13,17 +13,17 @@ mockcompose:
     testOnly: true
     className: sampleClz
     real:
-      - "methodThatUsesGlobalFunction,fmt=fmtMock"
+      - "methodThatUsesGlobalFunction,fmt"
   - name: mockSampleClz2
     testOnly: true
     className: sampleClz
     real:
-      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock"
+      - "methodThatUsesMultileGlobalFunctions,fmt:json"
   - name: mockSampleClz3
     testOnly: true
     className: sampleClz
     real:
-      - "methodThatUsesMultileGlobalFunctions,fmt=fmtMock"
+      - "methodThatUsesMultileGlobalFunctions,fmt"
   - name: MockSampleInterface
     testOnly: true
     interfaceName: SampleInterface
@@ -34,6 +34,6 @@ mockcompose:
   - name: mockFmtclonedFuncs
     testOnly: true
     real: 
-      - "functionThatUsesMultileGlobalFunctions,fmt=fmtMock:json=jsonMock" 
-      - "functionThatUsesGlobalFunction,fmt=fmtMock" 
-      - "functionThatUsesMultileGlobalFunctions2,fmt=fmtMock"
+      - "functionThatUsesMultileGlobalFunctions,fmt:json" 
+      - "functionThatUsesGlobalFunction,fmt" 
+      - "functionThatUsesMultileGlobalFunctions2,fmt"
