@@ -195,27 +195,30 @@ func (g *classMethodGenerator) getAutoMockCalleeConfig(
 }
 
 func (g *classMethodGenerator) composeMock(
+	composeContext map[string]any,
 	writer io.Writer,
 	fset *token.FileSet,
 	fnSpec *ast.FuncDecl,
 ) {
-	gogen.MockFunc(
-		writer,
-		g.mockPkgName,
-		g.mockName,
-		fset,
-		fnSpec.Name.Name,
-		fnSpec.Type.Params,
-		fnSpec.Type.Results,
-		nil,
-	)
+	if _, ok := composeContext[fnSpec.Name.Name]; !ok {
+		gogen.MockFunc(
+			writer,
+			g.mockPkgName,
+			g.mockName,
+			fset,
+			fnSpec.Name.Name,
+			fnSpec.Type.Params,
+			fnSpec.Type.Results,
+			nil,
+		)
+		composeContext[fnSpec.Name.Name] = struct{}{}
+	}
 }
 
 func (g *classMethodGenerator) generate(
 	writer io.Writer,
 	file *ast.File,
 ) error {
-
 	var buf bytes.Buffer
 
 	fset := token.NewFileSet()
@@ -263,6 +266,9 @@ func (g *classMethodGenerator) generateInternal(
 ) (generated bool, autoMockPkgs []string) {
 	writer.Write([]byte(fmt.Sprintf("package %s\n\n", g.mockPkgName)))
 
+	composeContext := map[string]any{}
+	imports := gosyntax.GetFileImportsAsMap(file)
+
 	if len(file.Decls) > 0 {
 		for _, d := range file.Decls {
 			if fnSpec, ok := d.(*ast.FuncDecl); ok {
@@ -275,9 +281,12 @@ func (g *classMethodGenerator) generateInternal(
 					// check if we need to clone a method function or a ordinary function
 					receiverSpec := gosyntax.FuncDeclReceiverSpec(fset, fnSpec)
 					if receiverSpec != nil {
+						//
+						// clone a method function
+						//
+
 						// find out callee situation
 						clzMethods := gosyntax.FindClassMethods(receiverSpec.TypeDecl, fset, file)
-						imports := gosyntax.GetFileImportsAsMap(file)
 						v := gosyntax.NewCalleeVisitor(
 							imports,
 							clzMethods,
@@ -305,7 +314,7 @@ func (g *classMethodGenerator) generateInternal(
 						autoMockPeer, pkgs := g.getAutoMockCalleeConfig(fnSpec.Name.Name)
 						if autoMockPeer {
 							// peer callee in order of how it is declared in file
-							g.generateMethodPeerCallees(writer, fset, file, fnSpec, v)
+							g.generateMethodPeerCallees(composeContext, writer, fset, file, fnSpec, v)
 						}
 
 						if len(pkgs) > 0 {
@@ -316,7 +325,9 @@ func (g *classMethodGenerator) generateInternal(
 							}
 						}
 					} else {
-						imports := gosyntax.GetFileImportsAsMap(file)
+						//
+						// clone a matched function
+						//
 						v := gosyntax.NewCalleeVisitor(
 							imports,
 							nil,
@@ -351,7 +362,7 @@ func (g *classMethodGenerator) generateInternal(
 					}
 				} else if matchType == MATCH_MOCK {
 					// generate mocked method
-					g.composeMock(writer, fset, fnSpec)
+					g.composeMock(composeContext, writer, fset, fnSpec)
 				}
 			} else {
 				// for any non-function declaration, export only imports
@@ -367,6 +378,7 @@ func (g *classMethodGenerator) generateInternal(
 }
 
 func (g *classMethodGenerator) generateMethodPeerCallees(
+	composeContext map[string]any,
 	writer io.Writer,
 	fset *token.FileSet,
 	file *ast.File,
@@ -382,7 +394,7 @@ func (g *classMethodGenerator) generateMethodPeerCallees(
 				gosyntax.ForEachFuncDeclInFile(file, func(fnSpec *ast.FuncDecl) {
 					if fnSpec.Name.Name == peerMethod &&
 						gosyntax.ReceiverDeclString(fset, callerFnSpec.Recv) == gosyntax.ReceiverDeclString(fset, fnSpec.Recv) {
-						g.composeMock(writer, fset, fnSpec)
+						g.composeMock(composeContext, writer, fset, fnSpec)
 					}
 				})
 			}
@@ -437,7 +449,7 @@ func (g *classMethodGenerator) getMockedPackageClzName(
 	pkgNameToMock string,
 	funcName string,
 ) string {
-	// scope mocked package class name at per-method per-package basis
+	// scope mocked package class name at per-caller per-ref-package basis
 	if pkgNameToMock != "." {
 		return fmt.Sprintf("mock_%s_%s_%s", g.mockName, funcName, pkgNameToMock)
 	}

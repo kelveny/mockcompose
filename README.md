@@ -66,7 +66,7 @@ You can use multiple `-real` and `-mock` options to specify a set of real class 
 //go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt
 ```
 
-In the example, `mockcompose` will generate a `testFoo` class with `Foo()` method function be cloned from real foo class implementation, all callee functions (from package `.` and package `fmt`) and callee peer methods ( indicated by `this`) will be mocked.
+In the example, `mockcompose` will generate a `testFoo` class with `Foo()` method function be cloned from real `foo` class implementation, all callee functions (from package `.` and package `fmt`) and callee peer methods (indicated by `this`) will be mocked.
 
 source Go class code: `foo.go`
 
@@ -104,7 +104,7 @@ func (f *foo) Bar() bool {
 
 ```
 
-`go generate` configuration: mocks.go
+`go generate` configuration: `mocks.go`
 
 ```go
 //go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt
@@ -278,7 +278,7 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-You can also apply the same approach to ordinary function:
+You can apply the same approach to ordinary function:
 
 ```go
 //go:generate mockcompose -n mockCallee -real functionThatUsesFunctionFromSameRoot,foo
@@ -373,6 +373,97 @@ func Test_functionThatUsesFunctionFromSameRoot(t *testing.T) {
     assert.Equal("Mocked Dummy", s)
 }
 
+```
+
+Sometimes you may also want to test against a set of functions with their callee closure be mocked.
+
+Source Go class in code: `bar.go`
+
+```go
+package bar
+
+import (
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+type fooBar struct {
+    name string
+}
+
+//go:generate mockcompose -n fooBarMock -c fooBar -real FooBar,this -real BarFoo,this:.
+
+func (f *fooBar) FooBar() string {
+    if f.order()%2 == 0 {
+        fmt.Printf("ordinal order\n")
+
+        return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
+    }
+
+    fmt.Printf("reverse order\n")
+    return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
+}
+
+func (f *fooBar) BarFoo() string {
+    if order()%2 == 0 {
+        fmt.Printf("ordinal order\n")
+
+        return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
+    }
+
+    fmt.Printf("reverse order\n")
+    return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
+}
+
+func (f *fooBar) Foo() string {
+    return "Foo"
+}
+
+func (f *fooBar) Bar() string {
+    return "Bar"
+}
+
+func (f *fooBar) order() int {
+    rand.Seed(time.Now().UnixNano())
+    return rand.Int()
+}
+
+func order() int {
+    rand.Seed(time.Now().UnixNano())
+    return rand.Int()
+}
+```
+
+Test on a set of method functions:
+
+```go
+func TestFooBar(t *testing.T) {
+    assert := require.New(t)
+
+    fb := &fooBarMock{
+        fooBar: fooBar{name: "TestFooBar"},
+    }
+
+    fb.On("order").Return(1).Once()
+    fb.On("order").Return(2).Once()
+
+    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(2).Once()
+    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(1).Once()
+
+    fb.On("Foo").Return("FooMocked")
+    fb.On("Bar").Return("BarMocked")
+
+    s1 := fb.FooBar()
+    assert.Equal("TestFooBar: BarMockedFooMocked", s1)
+    s2 := fb.BarFoo()
+    assert.Equal(s1, s2)
+
+    s1 = fb.FooBar()
+    assert.Equal("TestFooBar: FooMockedBarMocked", s1)
+    s2 = fb.BarFoo()
+    assert.Equal(s1, s2)
+}
 ```
 
 ## FAQ
