@@ -14,6 +14,8 @@ import (
 
 	"github.com/kelveny/mockcompose/pkg/gogen"
 	"github.com/kelveny/mockcompose/pkg/gosyntax"
+	gosyntaxtyp "github.com/kelveny/mockcompose/pkg/gosyntax"
+
 	"github.com/kelveny/mockcompose/pkg/gotype"
 	"github.com/kelveny/mockcompose/pkg/logger"
 )
@@ -33,6 +35,46 @@ type classMethodGenerator struct {
 
 	methodsToClone []string // method function names that need to be cloned in mocking class
 	methodsToMock  []string // method function names that need to be mocked
+}
+
+type generatorContext struct {
+	mockedFunctions map[string]any
+
+	// class type declaraion string -> method name -> *ReceiverSpec
+	clzMethods map[string]map[string]*gosyntax.ReceiverSpec
+}
+
+func (c *generatorContext) hasFunctionMocked(fnName string) bool {
+	if len(c.mockedFunctions) > 0 {
+		if _, ok := c.mockedFunctions[fnName]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *generatorContext) recordMockedFunction(fnName string) {
+	if c.mockedFunctions == nil {
+		c.mockedFunctions = make(map[string]any)
+	}
+	c.mockedFunctions[fnName] = struct{}{}
+}
+
+//go:generate mockcompose -n gctx_findClassMethods -c generatorContext -real findClassMethods,gosyntax
+func (c *generatorContext) findClassMethods(
+	clzTypeDeclString string,
+	fset *token.FileSet,
+	f *ast.File,
+) map[string]*gosyntaxtyp.ReceiverSpec {
+	if c.clzMethods == nil {
+		c.clzMethods = make(map[string]map[string]*gosyntaxtyp.ReceiverSpec)
+	}
+
+	if _, ok := c.clzMethods[clzTypeDeclString]; !ok {
+		c.clzMethods[clzTypeDeclString] = gosyntax.FindClassMethods(clzTypeDeclString, fset, f)
+	}
+
+	return c.clzMethods[clzTypeDeclString]
 }
 
 // use compiler to enforce interface compliance
@@ -195,12 +237,12 @@ func (g *classMethodGenerator) getAutoMockCalleeConfig(
 }
 
 func (g *classMethodGenerator) composeMock(
-	composeContext map[string]any,
+	generatorCtx *generatorContext,
 	writer io.Writer,
 	fset *token.FileSet,
 	fnSpec *ast.FuncDecl,
 ) {
-	if _, ok := composeContext[fnSpec.Name.Name]; !ok {
+	if !generatorCtx.hasFunctionMocked(fnSpec.Name.Name) {
 		gogen.MockFunc(
 			writer,
 			g.mockPkgName,
@@ -211,7 +253,8 @@ func (g *classMethodGenerator) composeMock(
 			fnSpec.Type.Results,
 			nil,
 		)
-		composeContext[fnSpec.Name.Name] = struct{}{}
+
+		generatorCtx.recordMockedFunction(fnSpec.Name.Name)
 	}
 }
 
@@ -266,7 +309,7 @@ func (g *classMethodGenerator) generateInternal(
 ) (generated bool, autoMockPkgs []string) {
 	writer.Write([]byte(fmt.Sprintf("package %s\n\n", g.mockPkgName)))
 
-	composeContext := map[string]any{}
+	generatorCtx := &generatorContext{}
 	imports := gosyntax.GetFileImportsAsMap(file)
 
 	if len(file.Decls) > 0 {
@@ -286,7 +329,7 @@ func (g *classMethodGenerator) generateInternal(
 						//
 
 						// find out callee situation
-						clzMethods := gosyntax.FindClassMethods(receiverSpec.TypeDecl, fset, file)
+						clzMethods := generatorCtx.findClassMethods(receiverSpec.TypeDecl, fset, file)
 						v := gosyntax.NewCalleeVisitor(
 							imports,
 							clzMethods,
@@ -314,7 +357,7 @@ func (g *classMethodGenerator) generateInternal(
 						autoMockPeer, pkgs := g.getAutoMockCalleeConfig(fnSpec.Name.Name)
 						if autoMockPeer {
 							// peer callee in order of how it is declared in file
-							g.generateMethodPeerCallees(composeContext, writer, fset, file, fnSpec, v)
+							g.generateMethodPeerCallees(generatorCtx, writer, fset, file, fnSpec, v)
 						}
 
 						if len(pkgs) > 0 {
@@ -362,7 +405,7 @@ func (g *classMethodGenerator) generateInternal(
 					}
 				} else if matchType == MATCH_MOCK {
 					// generate mocked method
-					g.composeMock(composeContext, writer, fset, fnSpec)
+					g.composeMock(generatorCtx, writer, fset, fnSpec)
 				}
 			} else {
 				// for any non-function declaration, export only imports
@@ -378,7 +421,7 @@ func (g *classMethodGenerator) generateInternal(
 }
 
 func (g *classMethodGenerator) generateMethodPeerCallees(
-	composeContext map[string]any,
+	generatorCtx *generatorContext,
 	writer io.Writer,
 	fset *token.FileSet,
 	file *ast.File,
@@ -394,7 +437,7 @@ func (g *classMethodGenerator) generateMethodPeerCallees(
 				gosyntax.ForEachFuncDeclInFile(file, func(fnSpec *ast.FuncDecl) {
 					if fnSpec.Name.Name == peerMethod &&
 						gosyntax.ReceiverDeclString(fset, callerFnSpec.Recv) == gosyntax.ReceiverDeclString(fset, fnSpec.Recv) {
-						g.composeMock(composeContext, writer, fset, fnSpec)
+						g.composeMock(generatorCtx, writer, fset, fnSpec)
 					}
 				})
 			}

@@ -9,15 +9,15 @@ FooService fooService = PowerMockito.mock(FooService.class);
 PowerMockito.doCallRealMethod().when(fooService).SomeFooMethod());
 ```
 
-In the example, SomeFooMethod() will be called to run real implementation code, while any sibling method that SomeFooMethod() calls will be taken from the mocked version. This ability can give us fine-grained control in unit testing, in world of Object Oriented languages.
+In the example, `SomeFooMethod()` will run its real implementation code, while any sibling methods that `SomeFooMethod()` calls will be taken from the mocked version. This capability provides fine-grained control in unit testing within the realm of object-oriented languages.
 
-Go is a first-class function programming language, Go best practices prefer small interfaces, in the extreme side of the spectrum, per-function interface would eliminate the needs of such usage pattern to be supported at all in mocking. This might be the reason why most Go mocking tools support only interface mocking.
+Go is a first-class function programming language, and Go best practices favor small interfaces. At the extreme end of the spectrum, using a per-function interface eliminates the need for such usage patterns in mocking. This might be why most Go mocking tools support only interface mocking.
 
-Nevertheless, if you ever come to here, you may be struggling in balancing the ideal world and practical world, try `mockcompose` to solve your immediate needs and you are recommended to follow Go best practices to refactor your code later, to avoid Go anti-pattern as mentioned above if possible.
+Nevertheless, if you find yourself here, you may be struggling to balance ideal practices with practical needs. Try `mockcompose` to address your immediate requirements, but it's recommended to follow Go best practices and refactor your code later to avoid the aforementioned Go anti-patterns whenever possible.
 
-`mockcompose` also supports generating [mockery](https://github.com/vektra/mockery) compatible code for Go interfaces and regular functions, which could help pave the way for your code to evolve into ideal shape.
+`mockcompose` also supports generating [mockery](https://github.com/vektra/mockery) compatible code for Go interfaces and regular functions, which can help guide your code toward an ideal structure.
 
-Note: Go class here refers to `Go struct` with functions that take receiver objects of the `struct` type.
+Note: In this context, a Go class refers to a Go `struct` with methods that have receiver objects of the `struct` type.
 
 ## Install
 
@@ -54,147 +54,313 @@ mockcompose generates mocking implementation for Go classes, interfaces and func
 
 `-pkg` option is usually omitted, `mockcompose` will derive Go package name automatically from current working directory.
 
-You can use multiple `-real` and `-mock` options to specify a set of real class method functions to clone and another set of class method functions to mock. The cloned and mocked method functions usually form a test closure. However, in most of cases, it is more convenient to do it at per-method basis. In this way, we clone a method function to test against, have all its callee functions be mocked. The mocked callee closure can be specified in format of `[(this|.|<pkg>)][:(this|.|<pkg>)]*`.
+You can use multiple `-real` and `-mock` options to specify a set of functions to clone and aother set to mock. The cloned and mocked functions usually form a __test closure__. However, in most cases, it is more convenient to handle this on a per-method basis. This way, you can clone a function to test against while mocking all its callee functions. The format for specifying the __callee closure__ for automatic code generation is `[(this|.|<pkg>)][:(this|.|<pkg>)]*`.
 
-- `this` means to mock all peer callee methods
-- `.` means to mock all callee functions that are within the same package as of the testing method
-- `<pkg>` means to mock all callee functions from the `<pkg>` package
+- `this` means to mock all peer callee methods. Only callees with the same receiver type (either `by-value` or `by-reference`) will be considered as peer callee method.
+- `.` means to mock all callee functions that are within the same package as of the function.
+- `<pkg>` means to mock all callee functions from the `<pkg>` package. Note, __when you have both references to functions and types from the `<pkg>` package, reference to these functions and types through different import names__.
 
-`mockcompose` is recommended to be used in `go generate`:
+All mocked function are generated with a `pointer` receiver type. It is also recommended to use `mockcompose` for class with methods that have `pointer` receiver types.
+
+Although mockcompose supports `YAML`-based configuration, in most cases, you may find it more convenient to use `mockcompose` inline with the `//go:generate mockcompose` directive.
+
+## Use cases
+
+### 1. Use `mockcompose` on `per-method` basis
+
+`mockcompose` uses this pattern by itself and follows the convention:
+
+- name the gnerated class in format of `<a shortened version of the class name from the source class>_<method name>` with `-n` option
+- use different import names for functions and types from `gosyntax` package
+
+source content (`cmd/clzgenerator.go`):
 
 ```go
-//go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt
-```
+package cmd
 
-In the example, `mockcompose` will generate a `testFoo` class with `Foo()` method function be cloned from real `foo` class implementation, all callee functions (from package `.` and package `fmt`) and callee peer methods (indicated by `this`) will be mocked.
+import (
+    ...
 
-source Go class code: `foo.go`
+    "github.com/kelveny/mockcompose/pkg/gosyntax"
+    gosyntaxtyp "github.com/kelveny/mockcompose/pkg/gosyntax"
 
-```go
-package foo
+    ...
+)
 
-import "fmt"
-
-type Foo interface {
-    Foo() string
-    Bar() bool
-}
-
-type foo struct {
-    name string
-}
-
-var _ Foo = (*foo)(nil)
-var _ Foo = (*dummyFoo)(nil)
-
-func (f *foo) Foo() string {
-    if f.Bar() {
-        return "Overriden with Bar"
+//go:generate mockcompose -n gctx_findClassMethods -c generatorContext -real findClassMethods,gosyntax
+func (c *generatorContext) findClassMethods(
+    clzTypeDeclString string,
+    fset *token.FileSet,
+    f *ast.File,
+) map[string]*gosyntaxtyp.ReceiverSpec {
+    if c.clzMethods == nil {
+        c.clzMethods = make(map[string]map[string]*gosyntaxtyp.ReceiverSpec)
     }
 
-    dummy()
-    fmt.Print("Foo")
-
-    return f.name
-}
-
-func (f *foo) Bar() bool {
-    return f.name == "bar"
-}
-
-```
-
-`go generate` configuration: `mocks.go`
-
-```go
-//go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt
-//go:generate mockcompose -n FooMock -i Foo
-package foo
-```
-
-`mockcompose` generated code for method function: (directed by `//go:generate mockcompose -n testFoo -c foo -real Foo,this:.:fmt`)
-
-```go
-type testFoo struct {
-    foo
-    mock.Mock
-    mock_testFoo_Foo_foo    // named after mock_<test class name>_<test nethod name>_<callee package name>
-    mock_testFoo_Foo_fmt
-}
-
-type mock_testFoo_Foo_foo struct {
-    mock.Mock
-}
-
-type mock_testFoo_Foo_fmt struct {
-    mock.Mock
-}
-
-func (f *testFoo) Foo() string {
-    dummy := f.mock_testFoo_Foo_foo.dummy
-    fmt := &f.mock_testFoo_Foo_fmt
-
-    if f.Bar() {
-        return "Overriden with Bar"
+    if _, ok := c.clzMethods[clzTypeDeclString]; !ok {
+        c.clzMethods[clzTypeDeclString] = gosyntax.FindClassMethods(clzTypeDeclString, fset, f)
     }
-    dummy()
-    fmt.Print("Foo")
-    return f.name
+
+    return c.clzMethods[clzTypeDeclString]
+}
+```
+
+`mockcompose` generated content (`cmd/mockc_gctx_findClassMethods_test.go`):
+
+```go
+// CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
+// THIS FILE SHOULD NOT BE EDITED BY HAND
+package cmd
+
+import (
+    "go/ast"
+    "go/token"
+
+    "github.com/kelveny/mockcompose/pkg/gosyntax"
+    gosyntaxtyp "github.com/kelveny/mockcompose/pkg/gosyntax"
+    "github.com/stretchr/testify/mock"
+)
+
+type gctx_findClassMethods struct {
+    generatorContext
+    mock.Mock
+    mock_gctx_findClassMethods_findClassMethods_gosyntax
 }
 
-func (m *testFoo) Bar() bool {
+type mock_gctx_findClassMethods_findClassMethods_gosyntax struct {
+    mock.Mock
+}
 
-    _mc_ret := m.Called()
+func (c *gctx_findClassMethods) findClassMethods(clzTypeDeclString string, fset *token.FileSet, f *ast.File) map[string]*gosyntaxtyp.ReceiverSpec {
+    gosyntax := &c.mock_gctx_findClassMethods_findClassMethods_gosyntax
 
-    var _r0 bool
+    if c.clzMethods == nil {
+        c.clzMethods = make(map[string]map[string]*gosyntaxtyp.ReceiverSpec)
+    }
+    if _, ok := c.clzMethods[clzTypeDeclString]; !ok {
+        c.clzMethods[clzTypeDeclString] = gosyntax.FindClassMethods(clzTypeDeclString, fset, f)
+    }
+    return c.clzMethods[clzTypeDeclString]
+}
 
-    if _rfn, ok := _mc_ret.Get(0).(func() bool); ok {
-        _r0 = _rfn()
+func (m *mock_gctx_findClassMethods_findClassMethods_gosyntax) FindClassMethods(clzTypeDeclString string, fset *token.FileSet, f *ast.File) map[string]*gosyntax.ReceiverSpec {
+
+    _mc_ret := m.Called(clzTypeDeclString, fset, f)
+
+    var _r0 map[string]*gosyntax.ReceiverSpec
+
+    if _rfn, ok := _mc_ret.Get(0).(func(string, *token.FileSet, *ast.File) map[string]*gosyntax.ReceiverSpec); ok {
+        _r0 = _rfn(clzTypeDeclString, fset, f)
     } else {
         if _mc_ret.Get(0) != nil {
-            _r0 = _mc_ret.Get(0).(bool)
+            _r0 = _mc_ret.Get(0).(map[string]*gosyntax.ReceiverSpec)
         }
     }
 
     return _r0
 
 }
+```
 
-func (m *mock_testFoo_Foo_foo) dummy() {
+test content (`clzgenerator_test.go`):
 
-    m.Called()
+```go
+package cmd
 
+import (
+    "testing"
+
+    "github.com/kelveny/mockcompose/pkg/gosyntax"
+    "github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/require"
+)
+
+func Test_generatorContext_findClassMethods_caching(t *testing.T) {
+    assert := require.New(t)
+
+    g := &gctx_findClassMethods{}
+
+    g.mock_gctx_findClassMethods_findClassMethods_gosyntax.On(
+        "FindClassMethods",
+        mock.Anything,
+        mock.Anything,
+        mock.Anything,
+    ).Return(
+        map[string]*gosyntax.ReceiverSpec{
+            "Foo": {
+                Name:     "f",
+                TypeDecl: "*foo",
+            },
+        },
+    )
+
+    // call it once
+    methods := g.findClassMethods("*foo", nil, nil)
+    assert.EqualValues(
+        map[string]*gosyntax.ReceiverSpec{
+            "Foo": {
+                Name:     "f",
+                TypeDecl: "*foo",
+            },
+        },
+        methods,
+    )
+
+    // call it the second time
+    methods = g.findClassMethods("*foo", nil, nil)
+    assert.EqualValues(
+        map[string]*gosyntax.ReceiverSpec{
+            "Foo": {
+                Name:     "f",
+                TypeDecl: "*foo",
+            },
+        },
+        methods,
+    )
+
+    // assert on caching behave
+    g.mock_gctx_findClassMethods_findClassMethods_gosyntax.AssertNumberOfCalls(t, "FindClassMethods", 1)
 }
 
-func (m *mock_testFoo_Foo_fmt) Print(a ...interface{}) (n int, err error) {
+func Test_generatorContext_findClassMethods_nil_return(t *testing.T) {
+    assert := require.New(t)
 
-    _mc_ret := m.Called(a...)
+    g := &gctx_findClassMethods{}
 
-    var _r0 int
+    g.mock_gctx_findClassMethods_findClassMethods_gosyntax.On(
+        "FindClassMethods",
+        mock.Anything,
+        mock.Anything,
+        mock.Anything,
+    ).Return(nil)
 
-    if _rfn, ok := _mc_ret.Get(0).(func(...interface{}) int); ok {
-        _r0 = _rfn(a...)
-    } else {
-        if _mc_ret.Get(0) != nil {
-            _r0 = _mc_ret.Get(0).(int)
-        }
-    }
+    // call it once
+    methods := g.findClassMethods("*foo", nil, nil)
+    assert.Nil(methods)
 
-    var _r1 error
+    // call it the second time
+    methods = g.findClassMethods("*foo", nil, nil)
+    assert.Nil(methods)
 
-    if _rfn, ok := _mc_ret.Get(1).(func(...interface{}) error); ok {
-        _r1 = _rfn(a...)
-    } else {
-        _r1 = _mc_ret.Error(1)
-    }
-
-    return _r0, _r1
-
+    // assert on caching behave
+    g.mock_gctx_findClassMethods_findClassMethods_gosyntax.AssertNumberOfCalls(t, "FindClassMethods", 1)
 }
 
 ```
 
-`mockcompose` generated code for a mocked implementation of interface Foo: (directed by `//go:generate mockcompose -n FooMock -i Foo`)
+### 2. Use `mockcompose` to form a test closure
+
+`mockcompose` directive to generate the closure:
+
+```go
+//go:generate mockcompose -n fooBarMock -c fooBar -real FooBar,this -real BarFoo,this:.
+```
+
+source content (`bar.go`):
+
+```go
+package bar
+
+import (
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+type fooBar struct {
+    name string
+}
+
+//go:generate mockcompose -n fooBarMock -c fooBar -real FooBar,this -real BarFoo,this:.
+
+func (f *fooBar) FooBar() string {
+    if f.order()%2 == 0 {
+        fmt.Printf("ordinal order\n")
+
+        return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
+    }
+
+    fmt.Printf("reverse order\n")
+    return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
+}
+
+func (f *fooBar) BarFoo() string {
+    if order()%2 == 0 {
+        fmt.Printf("ordinal order\n")
+
+        return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
+    }
+
+    fmt.Printf("reverse order\n")
+    return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
+}
+
+func (f *fooBar) Foo() string {
+    return "Foo"
+}
+
+func (f *fooBar) Bar() string {
+    return "Bar"
+}
+
+func (f *fooBar) order() int {
+    rand.Seed(time.Now().UnixNano())
+    return rand.Int()
+}
+
+func order() int {
+    rand.Seed(time.Now().UnixNano())
+    return rand.Int()
+}
+```
+
+test content:
+
+```go
+func TestFooBar(t *testing.T) {
+    assert := require.New(t)
+
+    fb := &fooBarMock{
+        fooBar: fooBar{name: "TestFooBar"},
+    }
+
+    fb.On("order").Return(1).Once()
+    fb.On("order").Return(2).Once()
+
+    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(2).Once()
+    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(1).Once()
+
+    fb.On("Foo").Return("FooMocked")
+    fb.On("Bar").Return("BarMocked")
+
+    s1 := fb.FooBar()
+    assert.Equal("TestFooBar: BarMockedFooMocked", s1)
+    s2 := fb.BarFoo()
+    assert.Equal(s1, s2)
+
+    s1 = fb.FooBar()
+    assert.Equal("TestFooBar: FooMockedBarMocked", s1)
+    s2 = fb.BarFoo()
+    assert.Equal(s1, s2)
+}
+```
+
+### 3. Use `mockcompose` to generate the mocking implementation of a Go interface
+
+`mockcompose` directive to generate for interface `Foo` defined in the same package:
+
+```go
+//go:generate mockcompose -n FooMock -i Foo
+package foo
+```
+
+If the Go interface is defined in external package, specify the `import` path of the package as example:
+
+```go
+//go:generate mockcompose -n FooMock -i Foo -sourcePkg github.com/kelveny/mockcompose/test/foo
+```
+
+generated implementation of interface `Foo`:
 
 ```go
 // CODE GENERATED AUTOMATICALLY WITH github.com/kelveny/mockcompose
@@ -247,38 +413,9 @@ func (m *FooMock) Bar() bool {
 
 ```
 
-You can now write unit tests to test at fine-grained granularity:
+### 4. Use `mockcompose` for ordinary function
 
-```go
-func TestFoo(t *testing.T) {
-    assert := require.New(t)
-
-    fooObj := &testFoo{
-        foo: foo{
-            name: "name of foo",
-        },
-    }
-
-    // mock peer method bar() called from Foo()
-    fooObj.On("Bar").Return(false)
-
-    // mock a package level function
-    fooObj.mock_testFoo_Foo_foo.On("dummy").Return()
-
-    // mock a function from other package
-    fooObj.mock_testFoo_Foo_fmt.On("Print", "Foo").Return(0, nil)
-
-    // call real implementation code in Foo()
-    s := fooObj.Foo()
-
-    assert.True(s == "name of foo")
-    fooObj.AssertNumberOfCalls(t, "Bar", 1)
-    fooObj.mock_testFoo_Foo_foo.AssertNumberOfCalls(t, "dummy", 1)
-    fooObj.mock_testFoo_Foo_fmt.AssertNumberOfCalls(t, "Print", 1)
-}
-```
-
-You can apply the same approach to ordinary function:
+source content:
 
 ```go
 //go:generate mockcompose -n mockCallee -real functionThatUsesFunctionFromSameRoot,foo
@@ -361,7 +498,7 @@ func (m *mock_mockCallee_functionThatUsesFunctionFromSameRoot_foo) Dummy() strin
 
 ```
 
-To test `functionThatUsesFunctionFromSameRoot` with mocked callees:
+test `functionThatUsesFunctionFromSameRoot` with mocked callees:
 
 ```go
 func Test_functionThatUsesFunctionFromSameRoot(t *testing.T) {
@@ -375,159 +512,9 @@ func Test_functionThatUsesFunctionFromSameRoot(t *testing.T) {
 
 ```
 
-Sometimes you may also want to test against a set of functions with their callee closure be mocked.
+### 6. Configure with `YAML` configuration
 
-Source Go class in code: `bar.go`
-
-```go
-package bar
-
-import (
-    "fmt"
-    "math/rand"
-    "time"
-)
-
-type fooBar struct {
-    name string
-}
-
-//go:generate mockcompose -n fooBarMock -c fooBar -real FooBar,this -real BarFoo,this:.
-
-func (f *fooBar) FooBar() string {
-    if f.order()%2 == 0 {
-        fmt.Printf("ordinal order\n")
-
-        return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
-    }
-
-    fmt.Printf("reverse order\n")
-    return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
-}
-
-func (f *fooBar) BarFoo() string {
-    if order()%2 == 0 {
-        fmt.Printf("ordinal order\n")
-
-        return fmt.Sprintf("%s: %s%s", f.name, f.Bar(), f.Foo())
-    }
-
-    fmt.Printf("reverse order\n")
-    return fmt.Sprintf("%s: %s%s", f.name, f.Foo(), f.Bar())
-}
-
-func (f *fooBar) Foo() string {
-    return "Foo"
-}
-
-func (f *fooBar) Bar() string {
-    return "Bar"
-}
-
-func (f *fooBar) order() int {
-    rand.Seed(time.Now().UnixNano())
-    return rand.Int()
-}
-
-func order() int {
-    rand.Seed(time.Now().UnixNano())
-    return rand.Int()
-}
-```
-
-Test on a set of method functions:
-
-```go
-func TestFooBar(t *testing.T) {
-    assert := require.New(t)
-
-    fb := &fooBarMock{
-        fooBar: fooBar{name: "TestFooBar"},
-    }
-
-    fb.On("order").Return(1).Once()
-    fb.On("order").Return(2).Once()
-
-    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(2).Once()
-    fb.mock_fooBarMock_BarFoo_bar.On("order").Return(1).Once()
-
-    fb.On("Foo").Return("FooMocked")
-    fb.On("Bar").Return("BarMocked")
-
-    s1 := fb.FooBar()
-    assert.Equal("TestFooBar: BarMockedFooMocked", s1)
-    s2 := fb.BarFoo()
-    assert.Equal(s1, s2)
-
-    s1 = fb.FooBar()
-    assert.Equal("TestFooBar: FooMockedBarMocked", s1)
-    s2 = fb.BarFoo()
-    assert.Equal(s1, s2)
-}
-```
-
-## FAQ
-
-### 1. Can mockcompose generate mocked implementation for interfaces?
-
-### __Answer__: Check out `mockcompose` self-test example [mockintf](https://github.com/kelveny/mockcompose/tree/main/test/mockintf)
-
-
-`go generate` configuration: mocks.go
-
-```go
-//go:generate mockcompose -n MockSampleInterface -i SampleInterface
-//go:generate mockcompose -n mockFoo -i Foo -p github.com/kelveny/mockcompose/test/foo
-package mockintf
-```
-
-With this configuration, `mockcompose` generates mocked interface implementation both for an interface defined in its own package and an interface defined in other package.
-
-intf_test.go
-
-```go
-package mockintf
-
-import (
-    "testing"
-
-    "github.com/kelveny/mockcompose/test/foo"
-    "github.com/stretchr/testify/mock"
-    "github.com/stretchr/testify/require"
-)
-
-func TestMockVariadic(t *testing.T) {
-    assert := require.New(t)
-
-    m := MockSampleInterface{}
-    m.On("Variadic",
-        "string1: %s, string2: %s, string3: %s",
-        "value1", "value2", "value3",
-    ).Return("success")
-
-    assert.True(m.Variadic(
-        "string1: %s, string2: %s, string3: %s",
-        "value1", "value2", "value3",
-    ) == "success")
-}
-
-...
-
-```
-
-### 2. How do I configure `go generate` in YAML?
-
-### __Answer__: Check out `mockcompose` self-test example [yaml](https://github.com/kelveny/mockcompose/tree/main/test/yaml)
-
-
-`go generate` configuration: mocks.go
-
-```go
-//go:generate mockcompose
-package yaml
-```
-
-`go generate` YAML configuration file: .mockcompose.yaml
+If `mockcompose` detects a `.mockcompose.yaml` or `.mockcompose.yml` file in the package directory, it will load the code generation configuration from that file.
 
 ```yaml
 mockcompose:
@@ -545,4 +532,9 @@ mockcompose:
     sourcePkg: github.com/kelveny/mockcompose/test/foo
 ```
 
-If `mockcompose` detects `.mockcompose.yaml` or `.mockcompose.yml` in package directory, it will load code generation configuration from the file.
+## Best pratices
+
+- use `mockcompose` for class with methods that have `pointer` receiver types
+- use different import names for functions and types from an external package
+- for `per-method` basis usage, name the gnerated class in format of `<a shortened version of the class name from the source class>_<method name>`
+- for `test-closure` usage, name the generated class in format of `<a shortened version of the class name from the source class>_<a testing aspect derived closure name>`

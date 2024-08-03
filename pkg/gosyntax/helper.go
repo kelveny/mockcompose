@@ -429,8 +429,8 @@ type ReceiverSpec struct {
 
 // Find all methods of a "class"
 //
-// For methods with pointer receivers, prepend "*" to type name when passed in clzName
-func FindClassMethods(clzName string, fset *token.FileSet, f *ast.File) map[string]*ReceiverSpec {
+// For methods with pointer receivers, prepend "*" to type name when passed in clzTypeDeclString
+func FindClassMethods(clzTypeDeclString string, fset *token.FileSet, f *ast.File) map[string]*ReceiverSpec {
 	methods := make(map[string]*ReceiverSpec)
 
 	ForEachFuncDeclInFile(f, func(funcDecl *ast.FuncDecl) {
@@ -438,7 +438,7 @@ func FindClassMethods(clzName string, fset *token.FileSet, f *ast.File) map[stri
 			recvStr := ParamListDeclString(fset, funcDecl.Recv)
 			tokens := strings.Split(recvStr, " ")
 			if len(tokens) == 2 {
-				if tokens[1] == clzName {
+				if tokens[1] == clzTypeDeclString {
 					methods[funcDecl.Name.Name] = &ReceiverSpec{
 						Name:     tokens[0],
 						TypeDecl: tokens[1],
