@@ -512,7 +512,7 @@ func Test_functionThatUsesFunctionFromSameRoot(t *testing.T) {
 
 ```
 
-### 6. Configure with `YAML` configuration
+### 5. Configure with `YAML` configuration
 
 If `mockcompose` detects a `.mockcompose.yaml` or `.mockcompose.yml` file in the package directory, it will load the code generation configuration from that file.
 
