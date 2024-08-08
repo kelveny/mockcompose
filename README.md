@@ -538,3 +538,6 @@ mockcompose:
 - use different import names for functions and types from an external package
 - for `per-method` basis usage, name the gnerated class in format of `<a shortened version of the class name from the source class>_<method name>`
 - for `test-closure` usage, name the generated class in format of `<a shortened version of the class name from the source class>_<a testing aspect derived closure name>`
+- be cautious when mocking functions that accept parameters with fields requiring protection in multi-threaded contexts. Inside the [testify implementation](https://github.com/stretchr/testify/blob/master/mock/mock.go#L950), it reads the passed-in parameters without any synchronization on those parameters. Since it doesn't have awareness of the internal concurrency requirements of the object, this can lead to data race conditions, which may be detected by running `go test -race`
+  - data-race example: https://github.com/kelveny/mockcompose/blob/main/test/race/race_test.go
+  - best practice for data-race avoidance: https://github.com/kelveny/mockcompose/blob/main/test/race2/race_test.go
